@@ -5,7 +5,7 @@
 # `server` service your domain with its port, e.g. https://bomber.example.com:8080
 # (the :8080 tells the proxy which container port to use; players never see it).
 # Set PUBLIC_ORIGIN (https://bomber.example.com), POSTGRES_PASSWORD and RUNNER_TOKEN
-# in the Environment Variables tab.
+# in the Environment Variables tab, and enable Advanced > Connect To Predefined Network.
 
 x-hardening: &hardening
   read_only: true
@@ -38,10 +38,11 @@ services:
         condition: service_healthy
       bot-runner:
         condition: service_healthy
-    # Coolify adds the network its proxy shares with the app; without this label the
-    # proxy may pick the server's address on an internal network and time out (504).
+    # Needs "Connect To Predefined Network" (Advanced) so the server joins the proxy's
+    # `coolify` network; without this label the proxy may pick the server's address
+    # on an internal network and time out (504).
     labels:
-      - traefik.docker.network=${COOLIFY_RESOURCE_UUID}
+      - traefik.docker.network=coolify
     networks: [data, sandbox]
     mem_limit: 512m
     pids_limit: 256
