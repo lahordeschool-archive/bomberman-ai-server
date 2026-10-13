@@ -38,7 +38,11 @@ services:
         condition: service_healthy
       bot-runner:
         condition: service_healthy
-    networks: [edge, data, sandbox]
+    # Coolify adds the network its proxy shares with the app; without this label the
+    # proxy may pick the server's address on an internal network and time out (504).
+    labels:
+      - traefik.docker.network=${COOLIFY_RESOURCE_UUID}
+    networks: [data, sandbox]
     mem_limit: 512m
     pids_limit: 256
 
@@ -76,7 +80,6 @@ services:
     shm_size: 128m
 
 networks:
-  edge: {}
   data: { internal: true }
   sandbox: { internal: true }
   egress: {}
