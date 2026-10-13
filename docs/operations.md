@@ -9,7 +9,7 @@ record pointing at the host.
 git clone <repo> /srv/bomber-arena && cd /srv/bomber-arena
 cp .env.example .env
 # PUBLIC_ORIGIN=https://bomber.example.com, SITE_ADDRESS=bomber.example.com
-# POSTGRES_PASSWORD and RUNNER_TOKEN: openssl rand -base64 32
+# POSTGRES_PASSWORD and RUNNER_TOKEN: openssl rand -hex 32
 docker compose up -d --build
 docker compose ps        # all services healthy
 ```

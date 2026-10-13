@@ -4,6 +4,12 @@ import { z } from 'zod';
 
 const DEV_RUNNER_TOKEN = 'dev-only-runner-token';
 
+/** Accepts `bomber.example.com` (as hosting panels often fill it) as `https://bomber.example.com`. */
+const withScheme = (value: unknown) =>
+  typeof value === 'string' && value.trim() && !/^[a-z][a-z0-9+.-]*:\/\//i.test(value.trim())
+    ? `https://${value.trim()}`
+    : value;
+
 const boolean = z
   .enum(['true', 'false', '1', '0'])
   .transform((value) => value === 'true' || value === '1');
@@ -17,7 +23,7 @@ const envSchema = z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
     DATABASE_URL: z.string().min(1).default('pglite:./data/pglite'),
-    PUBLIC_ORIGIN: z.url().default('http://localhost:8080'),
+    PUBLIC_ORIGIN: z.preprocess(withScheme, z.url().default('http://localhost:8080')),
     EXTRA_ORIGINS: z.string().default(''),
     COOKIE_SECURE: boolean.optional(),
     /** `true`, `false`, or a comma separated list of proxy addresses/CIDRs to trust. */
@@ -85,7 +91,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
   const publicOrigin = new URL(env.PUBLIC_ORIGIN).origin;
   const allowedOrigins = new Set([publicOrigin]);
   for (const origin of env.EXTRA_ORIGINS.split(',').map((value) => value.trim())) {
-    if (origin) allowedOrigins.add(new URL(origin).origin);
+    if (origin) allowedOrigins.add(new URL(String(withScheme(origin))).origin);
   }
   if (env.NODE_ENV !== 'production') {
     // Browsers treat localhost, 127.0.0.1 and [::1] as different origins.

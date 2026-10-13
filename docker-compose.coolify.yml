@@ -1,0 +1,85 @@
+# Coolify stack: same services as docker-compose.yml without Caddy, because Coolify's
+# own proxy already owns ports 80/443 and terminates TLS.
+#
+# In Coolify: Docker Compose Location = /docker-compose.coolify.yml, then give the
+# `server` service your domain with its port, e.g. https://bomber.example.com:8080
+# (the :8080 tells the proxy which container port to use; players never see it).
+# Set PUBLIC_ORIGIN (https://bomber.example.com), POSTGRES_PASSWORD and RUNNER_TOKEN
+# in the Environment Variables tab.
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ['no-new-privileges:true']
+  tmpfs: ['/tmp:size=16m']
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: '10m', max-file: '5' }
+
+services:
+  server:
+    <<: *hardening
+    build: { context: ., target: server }
+    expose: ['8080']
+    environment:
+      NODE_ENV: production
+      # The password stays out of the URL so any character works in it.
+      DATABASE_URL: postgres://bomber@postgres:5432/bomber
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN, e.g. https://bomber.example.com}
+      RUNNER_URL: http://bot-runner:8090
+      RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN}
+      TRUST_PROXY: uniquelocal
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      RANKED_CONCURRENCY: ${RANKED_CONCURRENCY:-2}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bot-runner:
+        condition: service_healthy
+    networks: [edge, data, sandbox]
+    mem_limit: 512m
+    pids_limit: 256
+
+  bot-runner:
+    <<: *hardening
+    build: { context: ., target: bot-runner }
+    environment:
+      NODE_ENV: production
+      RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN}
+      RUNNER_WORKERS: ${RUNNER_WORKERS:-2}
+      RUNNER_MAX_SESSIONS: ${RUNNER_MAX_SESSIONS:-64}
+      BOT_MEMORY_MB: ${BOT_MEMORY_MB:-32}
+      BOT_FETCH: ${BOT_FETCH:-on}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    networks: [sandbox, egress]
+    mem_limit: 1g
+    cpus: ${RUNNER_CPUS:-2}
+    pids_limit: 128
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bomber
+      POSTGRES_USER: bomber
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bomber -d bomber']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [data]
+    shm_size: 128m
+
+networks:
+  edge: {}
+  data: { internal: true }
+  sandbox: { internal: true }
+  egress: {}
+
+volumes:
+  pg-data: {}

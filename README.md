@@ -65,7 +65,14 @@ docker compose up -d --build
 ```
 
 Caddy terminates TLS and is the only published service; PostgreSQL and the bot runner
-live on internal networks. See [docs/operations.md](docs/operations.md) for the
+live on internal networks.
+
+On **Coolify** (or any host whose proxy already owns ports 80/443), point the
+resource at `docker-compose.coolify.yml` instead: same stack without Caddy. Give the
+`server` service your domain with its container port (`https://bomber.example.com:8080`)
+and set `PUBLIC_ORIGIN`, `POSTGRES_PASSWORD`, and `RUNNER_TOKEN`.
+
+See [docs/operations.md](docs/operations.md) for the
 runbook: configuration, backups, upgrades, and incident handling.
 
 **Before a public launch, read [docs/assets.md](docs/assets.md):** the bundled sprites

@@ -44,7 +44,9 @@ services:
     image: bomber-arena/server:${TAG:-latest}
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://bomber:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/bomber
+      # The password stays out of the URL so any character works in it.
+      DATABASE_URL: postgres://bomber@postgres:5432/bomber
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN in .env}
       RUNNER_URL: http://bot-runner:8090
       RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN in .env}
