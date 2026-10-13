@@ -5,6 +5,7 @@ import {
   buildObservation,
   getSampleBot,
   parseAction,
+  randomSampleBots,
   runMatch,
   SAMPLE_BOTS,
   STARTER_SOURCE,
@@ -158,6 +159,40 @@ describe('sample bots and match loop', () => {
     }
     expect(bomberSelfKills).toBeLessThanOrEqual(1);
     expect(bomberWins).toBeGreaterThanOrEqual(4);
+  });
+
+  it('every strategy sample plays full four player matches and rarely kills itself', async () => {
+    const strategies = SAMPLE_BOTS.filter((bot) => bot.slug !== 'random-walker');
+    const games = new Map(strategies.map((bot) => [bot.slug, { played: 0, self: 0, bombs: 0 }]));
+    for (let seed = 1; seed <= 8; seed++) {
+      const lineup = strategies.map((_, i) => strategies[(i + seed) % strategies.length]!);
+      const state = createGame({ seed, playerCount: 4, settings: { maxTicks: 2400 } });
+      const errors: unknown[] = [];
+      const { intents } = await runMatch({
+        state,
+        controllers: lineup.map((bot, id) => createVmController(bot.source, botSeed(seed, id))),
+        tickMs: 0,
+        decisionTimeoutMs: 1000,
+        onDecisionError: (_, error) => errors.push(error),
+      });
+      expect(errors).toEqual([]);
+      lineup.forEach((bot, id) => {
+        const entry = games.get(bot.slug)!;
+        entry.played++;
+        if (!state.players[id]!.alive && state.players[id]!.killedBy === null) entry.self++;
+        entry.bombs += intents.filter((i) => i.playerId === id && i.intent.type === 'bomb').length;
+      });
+    }
+    for (const [slug, entry] of games) {
+      expect(entry.bombs, slug).toBeGreaterThan(0);
+      expect(entry.self / entry.played, slug).toBeLessThanOrEqual(0.4);
+    }
+  });
+
+  it('picks random house bots without repeats until the pool runs out', () => {
+    const picks = randomSampleBots(SAMPLE_BOTS.length);
+    expect(new Set(picks.map((bot) => bot.slug)).size).toBe(SAMPLE_BOTS.length);
+    expect(randomSampleBots(SAMPLE_BOTS.length + 2)).toHaveLength(SAMPLE_BOTS.length + 2);
   });
 
   it('never waits for a silent bot in real time and keeps the replay exact', async () => {

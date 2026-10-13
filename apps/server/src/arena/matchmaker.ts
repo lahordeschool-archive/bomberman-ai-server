@@ -23,7 +23,7 @@ interface Pick {
 
 /**
  * Builds ranked matches from the queue: the bot that waited longest is matched with
- * the closest rated queued bots, and house bots fill the remaining seats. Every bot
+ * the closest rated queued bots, and randomly drawn house bots fill the remaining seats. Every bot
  * runs inside the isolated runner; only these server completed matches are rated.
  */
 export class Matchmaker {
@@ -105,12 +105,13 @@ export class Matchmaker {
       kind: 'ranked',
       ownerId: entry.ownerId,
     }));
-    for (const house of this.context.house) {
-      if (picks.length >= MAX_PLAYERS_PER_MATCH) break;
+    const house = [...this.context.house];
+    while (picks.length < MAX_PLAYERS_PER_MATCH && house.length > 0) {
+      const [pick] = house.splice(Math.floor(Math.random() * house.length), 1);
       picks.push({
-        botId: house.botId,
-        versionId: house.versionId,
-        name: house.name,
+        botId: pick!.botId,
+        versionId: pick!.versionId,
+        name: pick!.name,
         owner: 'House',
         kind: 'house',
         ownerId: null,

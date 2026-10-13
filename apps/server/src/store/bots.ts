@@ -20,6 +20,7 @@ interface BotSummaryRow {
   owner_is_house: boolean;
   active_version_id: string | null;
   active_version: number | null;
+  active_label: string | null;
   active_created_at: Date | null;
   rating: number | null;
   games: number | null;
@@ -32,6 +33,7 @@ export interface BotVersionRow {
   id: string;
   bot_id: string;
   version: number;
+  label: string | null;
   source: string;
   source_hash: string;
   sdk_version: number;
@@ -42,7 +44,7 @@ export interface BotVersionRow {
 const SUMMARY_SELECT = `
   select b.id, b.name, b.owner_id, b.created_at, b.active_version_id,
          u.username as owner_username, u.display_name as owner_display_name, u.is_house as owner_is_house,
-         v.version as active_version, v.created_at as active_created_at,
+         v.version as active_version, v.label as active_label, v.created_at as active_created_at,
          r.rating, r.games, r.wins,
          exists (select 1 from ranked_queue q where q.bot_id = b.id) as queued
   from bots b
@@ -64,6 +66,7 @@ function toSummary(row: BotSummaryRow): BotSummary {
         ? {
             id: row.active_version_id,
             version: row.active_version,
+            label: row.active_label,
             createdAt: iso(row.active_created_at),
           }
         : null,
@@ -80,6 +83,7 @@ export function toVersionSummary(row: BotVersionRow): BotVersionSummary {
   return {
     id: row.id,
     version: row.version,
+    label: row.label,
     sourceHash: row.source_hash,
     sdkVersion: row.sdk_version,
     visibility: row.visibility,
@@ -160,13 +164,14 @@ export async function addVersion(
   botId: string,
   source: string,
   visibility: 'private' | 'public',
+  label: string | null = null,
 ): Promise<BotVersionRow> {
   await db.query('select id from bots where id = $1 for update', [botId]);
   const { rows } = await db.query<BotVersionRow>(
-    `insert into bot_versions (bot_id, version, source, source_hash, sdk_version, visibility)
-     values ($1, coalesce((select max(version) from bot_versions where bot_id = $1), 0) + 1, $2, $3, $4, $5)
+    `insert into bot_versions (bot_id, version, source, source_hash, sdk_version, visibility, label)
+     values ($1, coalesce((select max(version) from bot_versions where bot_id = $1), 0) + 1, $2, $3, $4, $5, $6)
      returning *`,
-    [botId, source, sourceHash(source), SDK_VERSION, visibility],
+    [botId, source, sourceHash(source), SDK_VERSION, visibility, label],
   );
   const version = rows[0]!;
   await db.query('update bots set active_version_id = $2, updated_at = now() where id = $1', [

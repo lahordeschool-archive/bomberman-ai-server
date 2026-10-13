@@ -77,8 +77,10 @@ export const api = {
   deleteBot: (id: string) => request<void>('DELETE', `/api/bots/${id}`),
   version: (botId: string, versionId: string) =>
     request<BotVersionDetail>('GET', `/api/bots/${botId}/versions/${versionId}`),
-  submitVersion: (botId: string, source: string, visibility: 'private' | 'public') =>
-    request<BotVersionDetail>('POST', `/api/bots/${botId}/versions`, { source, visibility }),
+  submitVersion: (
+    botId: string,
+    body: { source: string; visibility: 'private' | 'public'; label: string },
+  ) => request<BotVersionDetail>('POST', `/api/bots/${botId}/versions`, body),
   enqueue: (botId: string) => request<RankedStatus>('POST', `/api/bots/${botId}/ranked`),
   dequeue: (botId: string) => request<RankedStatus>('DELETE', `/api/bots/${botId}/ranked`),
 

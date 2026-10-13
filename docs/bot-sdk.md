@@ -160,6 +160,21 @@ access.
 3. **Queue for ranked** keeps your active version in the matchmaking pool until you
    leave the queue. Every ranked match is replayable and verifiable.
 
-The two sample bots (`Random Walker`, `Cautious Bomber`) live in
-`packages/bot-sdk/src/samples.ts`; the cautious bomber shows a threat map and a
-breadth first search for escape routes.
+The sample bots live in `packages/bot-sdk/src/samples.ts`. Load any of them from the
+**Templates** dropdown above the editor to start from a working strategy:
+
+| Bot             | Strategy                                                               |
+| --------------- | ---------------------------------------------------------------------- |
+| Random Walker   | Wanders and never bombs. The easy opponent.                            |
+| Cautious Bomber | Breaks walls, chases players, checks its escape route before bombing.  |
+| Item Hunter     | Collects power-ups first, digs through walls to find more.             |
+| Hunter          | Goes straight for the nearest player and bombs as soon as it lines up. |
+| Survivor        | Keeps its distance, avoids fights, plays for time.                     |
+
+Item Hunter, Hunter, and Survivor share a small toolkit worth copying: a threat map
+that follows chain reactions, a breadth first search that avoids flames by arrival
+time, and `canBombSafely`, which only plants when two escape routes stay open.
+
+The same bots are the house bots: they fill empty seats in ranked matches and casual
+rooms, drawn at random for each match, and they are the default (random) opponents
+in local tests.

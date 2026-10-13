@@ -1,4 +1,5 @@
 import { lazy, Suspense, type ReactNode } from 'react';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { Layout } from './components/Layout.tsx';
 import { Skeleton } from './components/ui.tsx';
 import { matchPath, useRouter } from './lib/router.tsx';
@@ -45,11 +46,14 @@ function Routes() {
 }
 
 export function App() {
+  const { path } = useRouter();
   return (
     <Layout>
-      <Suspense fallback={<Skeleton lines={6} />}>
-        <Routes />
-      </Suspense>
+      <ErrorBoundary key={path}>
+        <Suspense fallback={<Skeleton lines={6} />}>
+          <Routes />
+        </Suspense>
+      </ErrorBoundary>
     </Layout>
   );
 }

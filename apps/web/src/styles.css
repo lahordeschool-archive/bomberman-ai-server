@@ -363,6 +363,7 @@ small {
 .select-field select,
 .select-field input,
 .rename-form input,
+.template-select,
 .replay-controls select {
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--surface-4);
@@ -920,6 +921,47 @@ a.match-row:hover {
   font-size: 20px;
   font-weight: 600;
 }
+.modal {
+  width: min(440px, calc(100vw - 2 * var(--space-4)));
+  padding: 0;
+  border: 1px solid var(--surface-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.modal::backdrop {
+  background: rgb(0 0 0 / 0.6);
+}
+.modal-body {
+  padding: var(--space-5);
+}
+.modal-body h2 {
+  margin: 0 0 var(--space-4);
+  font-size: 20px;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.version-label {
+  overflow-wrap: anywhere;
+}
+.button-icon {
+  width: 42px;
+  padding-inline: 0;
+  font-size: 18px;
+}
+.template-select {
+  min-width: 0;
+  max-width: 180px;
+  flex: 0 1 180px;
+  height: 42px;
+  padding-block: 0;
+  font-size: 14px;
+  cursor: pointer;
+}
 .version-private {
   display: inline-flex;
   align-items: center;
@@ -930,9 +972,13 @@ a.match-row:hover {
   margin-top: var(--space-5);
   scroll-margin-top: 96px;
 }
+/* Sits on the toolbar row, so the board below lines up with the top of the code. */
 .editor-header-meta {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  min-height: var(--toolbar-height);
   gap: var(--space-3);
   color: var(--muted);
   font-size: 14px;
@@ -954,8 +1000,11 @@ a.match-row:hover {
 .editor-toolbar {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: var(--space-2);
+  min-height: var(--toolbar-height);
+}
+.editor-layout {
+  --toolbar-height: 42px;
 }
 .toolbar-spacer {
   flex: 1;

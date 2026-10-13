@@ -136,7 +136,7 @@ export function registerBotRoutes(app: FastifyInstance, context: AppContext): vo
     },
     async (request, reply) => {
       const { session, bot } = await ownedBot(request);
-      const { source, visibility } = submitVersionBody.parse(request.body);
+      const { source, visibility, label } = submitVersionBody.parse(request.body);
       const validation = await context.executor.validate(source);
       if (!validation.ok) {
         throw new HttpError(
@@ -145,7 +145,9 @@ export function registerBotRoutes(app: FastifyInstance, context: AppContext): vo
           `The sandbox rejected this version: ${validation.error}`,
         );
       }
-      const version = await db.transaction((tx) => addVersion(tx, bot.id, source, visibility));
+      const version = await db.transaction((tx) =>
+        addVersion(tx, bot.id, source, visibility, label),
+      );
       await recordAudit(db, {
         userId: session.user.id,
         action: 'bot_version_submitted',

@@ -41,7 +41,10 @@ test('register, write a bot, test it, play ranked, watch the replay, and reach t
   await page.getByRole('button', { name: 'Stop' }).click();
 
   await page.getByRole('button', { name: 'Save version' }).click();
-  await expect(page.getByText(/Saved as version 1/)).toBeVisible();
+  const saveDialog = page.getByRole('dialog', { name: 'Save a version' });
+  await saveDialog.getByLabel('Version name').fill('First try');
+  await saveDialog.getByRole('button', { name: 'Save version' }).click();
+  await expect(page.getByText(/Saved “First try” as version 1/)).toBeVisible();
 
   await page.getByRole('tab', { name: 'Ranked' }).click();
   await page.getByRole('button', { name: 'Queue for ranked' }).click();

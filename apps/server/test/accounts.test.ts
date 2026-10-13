@@ -194,16 +194,23 @@ describe('bots and versions', () => {
     const source = SAMPLE_BOTS[0]!.source;
     const v1 = await owner.request('POST', `/api/bots/${botId}/versions`, { source });
     expect(v1.status).toBe(201);
-    expect(v1.body).toMatchObject({ version: 1, visibility: 'private', sdkVersion: 1, source });
+    expect(v1.body).toMatchObject({
+      version: 1,
+      label: null,
+      visibility: 'private',
+      sdkVersion: 1,
+      source,
+    });
     expect(v1.body.sourceHash).toMatch(/^[0-9a-f]{64}$/);
     const v2 = await owner.request('POST', `/api/bots/${botId}/versions`, {
       source,
       visibility: 'public',
+      label: '  Aggressive opener  ',
     });
-    expect(v2.body.version).toBe(2);
+    expect(v2.body).toMatchObject({ version: 2, label: 'Aggressive opener' });
 
     const detail = await owner.request('GET', `/api/bots/${botId}`);
-    expect(detail.body.activeVersion.version).toBe(2);
+    expect(detail.body.activeVersion).toMatchObject({ version: 2, label: 'Aggressive opener' });
     expect(detail.body.versions.map((version: { version: number }) => version.version)).toEqual([
       2, 1,
     ]);
@@ -337,6 +344,25 @@ describe('matches, replays, and ratings', () => {
     const leaderboard = (await new TestClient(app).request('GET', '/api/leaderboard')).body;
     expect(leaderboard.total).toBeGreaterThanOrEqual(2);
     expect(leaderboard.entries[0].rank).toBe(1);
+
+    const newcomer = new TestClient(app);
+    await newcomer.register('ladder_newcomer');
+    const fresh = await newcomer.request('POST', '/api/bots', { name: 'Fresh Face' });
+    await newcomer.request('POST', `/api/bots/${fresh.body.id}/versions`, {
+      source: SAMPLE_BOTS[0]!.source,
+    });
+    const onLadder = async () =>
+      (await new TestClient(app).request('GET', '/api/leaderboard?limit=100')).body.entries as {
+        botId: string;
+        games: number;
+      }[];
+    expect((await onLadder()).some((entry) => entry.botId === fresh.body.id)).toBe(false);
+    await newcomer.request('POST', `/api/bots/${fresh.body.id}/ranked`);
+    const queued = await onLadder();
+    expect(queued.at(-1)).toMatchObject({ botId: fresh.body.id, games: 0 });
+    expect(queued.slice(0, -1).every((entry) => entry.games > 0)).toBe(true);
+    await newcomer.request('DELETE', `/api/bots/${fresh.body.id}/ranked`);
+    expect((await onLadder()).some((entry) => entry.botId === fresh.body.id)).toBe(false);
 
     const listed = (await new TestClient(app).request('GET', `/api/matches?botId=${a!.botId}`))
       .body;

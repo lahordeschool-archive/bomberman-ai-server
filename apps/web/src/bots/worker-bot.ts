@@ -6,12 +6,15 @@ import {
   parseHarnessOutput,
 } from '@bomberman/bot-sdk';
 import { TICK_MS } from '@bomberman/game-engine';
+import { reloadForStaleChunk } from '../components/ErrorBoundary.tsx';
 import type { WorkerInbound, WorkerOutbound } from './bot-worker.ts';
 
 /** The server sandbox is slower than your browser; warn well before its 100 ms CPU budget. */
 export const SLOW_DECISION_MS = 25;
 /** A worker whose synchronous code runs this long is terminated until restarted. */
 const HARD_LIMIT_MS = 1500;
+/** Loading includes fetching and compiling the sandbox, which is slow on a cold cache. */
+const LOAD_TIMEOUT_MS = 10_000;
 /** Late-turn warnings are throttled so a slow bot does not flood the console. */
 const LATE_WARNING_INTERVAL_MS = 3000;
 
@@ -21,6 +24,18 @@ export interface WorkerBotEvents {
   onSlow?(durationMs: number, context: { tick: number }): void;
   /** The decision missed its budget (or never came): the player skipped that turn. */
   onLate?(durationMs: number | null, context: { tick: number }): void;
+}
+
+/**
+ * Bot code errors are reported by the worker itself, so a worker that never starts usually
+ * means a newer build deleted its script (some browsers then fire no error event at all).
+ * The bundle embedding the worker URL is gone too in that case.
+ */
+async function reloadIfRebuilt(): Promise<void> {
+  const response = await fetch(import.meta.url, { method: 'HEAD', cache: 'no-store' }).catch(
+    () => null,
+  );
+  if (response?.status === 404) reloadForStaleChunk();
 }
 
 interface PendingCall {
@@ -59,8 +74,9 @@ export class WorkerBot implements BotController {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         worker.terminate();
+        void reloadIfRebuilt();
         reject(new Error('Your bot took too long to load'));
-      }, HARD_LIMIT_MS);
+      }, LOAD_TIMEOUT_MS);
       const onMessage = (event: MessageEvent<WorkerOutbound>) => {
         if (event.data.type === 'loaded' || event.data.type === 'loadError') {
           clearTimeout(timer);
@@ -76,6 +92,7 @@ export class WorkerBot implements BotController {
       worker.addEventListener('error', (event) => {
         clearTimeout(timer);
         worker.terminate();
+        void reloadIfRebuilt();
         reject(new Error(event.message || 'Your bot failed to load'));
       });
       worker.postMessage({ type: 'load', source, seed } satisfies WorkerInbound);

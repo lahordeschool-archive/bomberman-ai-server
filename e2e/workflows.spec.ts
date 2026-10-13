@@ -44,6 +44,18 @@ async function setSource(page: Page, source: string): Promise<void> {
   await page.keyboard.insertText(source);
 }
 
+async function saveVersion(
+  page: Page,
+  name: string,
+  options: { public?: boolean } = {},
+): Promise<void> {
+  await page.getByRole('button', { name: 'Save version' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Save a version' });
+  await dialog.getByLabel('Version name').fill(name);
+  if (options.public) await dialog.getByLabel(/Public source/).check();
+  await dialog.getByRole('button', { name: 'Save version' }).click();
+}
+
 async function signOut(page: Page): Promise<void> {
   await page.goto('/account');
   await page.getByRole('button', { name: 'Sign out' }).click();
@@ -167,6 +179,17 @@ test.describe('bots', () => {
     await createBot(page, 'Draft Bot');
     await expect(page.locator('.editor-header-meta')).toContainText('No version yet');
 
+    await page.getByLabel('Load code').selectOption('hunter');
+    await expect(page.getByRole('textbox', { name: 'Bot source code' })).toContainText(
+      'Hunter: walks straight at the nearest player',
+    );
+    await expect(page.locator('.console-lines')).toContainText('Loaded the Hunter template');
+    page.once('dialog', (dialog) => void dialog.accept());
+    await page.getByLabel('Load code').selectOption('survivor');
+    await expect(page.getByRole('textbox', { name: 'Bot source code' })).toContainText(
+      'Survivor: plays for time',
+    );
+
     await page.getByRole('button', { name: 'Rename bot' }).click();
     await page.getByLabel('Bot name').fill('Renamed Bot');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -179,7 +202,13 @@ test.describe('bots', () => {
       /SyntaxError|Unexpected|failed/i,
     );
     await page.getByRole('button', { name: 'Save version' }).click();
-    await expect(page.getByRole('alert')).toContainText('The sandbox rejected this version');
+    const saveDialog = page.getByRole('dialog', { name: 'Save a version' });
+    await expect(saveDialog.getByRole('button', { name: 'Save version' })).toBeDisabled();
+    await saveDialog.getByLabel('Version name').fill('Broken');
+    await saveDialog.getByRole('button', { name: 'Save version' }).click();
+    await expect(saveDialog.getByRole('alert')).toContainText('The sandbox rejected this version');
+    await saveDialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(saveDialog).toBeHidden();
 
     await setSource(page, WALKER);
     await page.getByRole('button', { name: 'Run test' }).click();
@@ -187,14 +216,15 @@ test.describe('bots', () => {
     await expect(page.locator('.scoreboard')).toContainText('Renamed Bot');
     await page.getByRole('button', { name: 'Stop' }).click();
 
-    await page.getByRole('button', { name: 'Save version' }).click();
-    await expect(page.getByText(/Saved as version 1/)).toBeVisible();
+    await saveVersion(page, 'Wanderer');
+    await expect(page.getByText(/Saved “Wanderer” as version 1/)).toBeVisible();
     await expect(page.getByText('Unsaved changes')).toHaveCount(0);
 
     await setSource(page, WALKER.replace('walker ready', 'walker v2 ready'));
-    await page.getByLabel('Public source').check();
-    await page.getByRole('button', { name: 'Save version' }).click();
-    await expect(page.getByText(/Saved as version 2/)).toBeVisible();
+    await saveVersion(page, 'Wanderer 2', { public: true });
+    await expect(page.getByText(/Saved “Wanderer 2” as version 2/)).toBeVisible();
+    const loadCode = page.getByLabel('Load code');
+    await expect(loadCode.locator('option:checked')).toHaveText('v2 · Wanderer 2 (active)');
 
     await page.getByRole('tab', { name: 'Ranked' }).click();
     const versions = page.locator('.version-list li');
@@ -202,11 +232,30 @@ test.describe('bots', () => {
     await expect(versions.first()).toContainText('Active');
     await expect(versions.first()).toContainText('Public');
     await versions.nth(1).getByRole('button', { name: 'Load' }).click();
-    await expect(page.locator('.console-lines')).toContainText('Loaded version 1');
+    await expect(page.locator('.console-lines')).toContainText('Loaded v1 · Wanderer');
     await expect(page.getByRole('textbox', { name: 'Bot source code' })).not.toContainText(
       'walker v2 ready',
     );
     await expect(page.getByText('Unsaved changes')).toBeVisible();
+    await expect(loadCode.locator('option:checked')).toHaveText('v1 · Wanderer');
+
+    await expect(
+      loadCode.locator('optgroup[label="Saved versions of this bot"] option'),
+    ).toHaveText(['v2 · Wanderer 2 (active)', 'v1 · Wanderer']);
+    await loadCode.selectOption({ label: 'v2 · Wanderer 2 (active)' });
+    await expect(page.getByRole('textbox', { name: 'Bot source code' })).toContainText(
+      'walker v2 ready',
+    );
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0);
+
+    await page.getByRole('tab', { name: 'Local test' }).click();
+    await page.getByLabel('Opponent 1').selectOption({ label: 'v1 · Wanderer' });
+    await page.getByRole('button', { name: 'Run test' }).click();
+    await expect(page.locator('.console-lines')).toContainText('walker ready');
+    await expect(page.locator('.console-lines')).toContainText('walker v2 ready');
+    await expect(page.locator('.scoreboard')).toContainText('v1 · Wanderer');
+    await page.getByRole('button', { name: 'Stop' }).click();
+    await page.getByRole('tab', { name: 'Ranked' }).click();
 
     await page.getByRole('button', { name: 'Queue for ranked' }).click();
     await expect(page.getByRole('button', { name: 'Leave the queue' })).toBeVisible();
@@ -234,12 +283,11 @@ test.describe('bots', () => {
     const author = await register(page);
     const botId = await createBot(page, 'Shared Bot');
     await setSource(page, WALKER.replace('walker ready', 'shared private'));
-    await page.getByRole('button', { name: 'Save version' }).click();
-    await expect(page.getByText(/Saved as version 1/)).toBeVisible();
+    await saveVersion(page, 'Secret');
+    await expect(page.getByText(/as version 1/)).toBeVisible();
     await setSource(page, WALKER.replace('walker ready', 'shared public'));
-    await page.getByLabel('Public source').check();
-    await page.getByRole('button', { name: 'Save version' }).click();
-    await expect(page.getByText(/Saved as version 2/)).toBeVisible();
+    await saveVersion(page, 'Open book', { public: true });
+    await expect(page.getByText(/as version 2/)).toBeVisible();
 
     const visitor = await browser.newPage();
     await visitor.goto(`/u/${author}`);
@@ -320,8 +368,8 @@ test.describe('ranked', () => {
     const username = await register(page);
     const botId = await createBot(page, 'Ladder Bot');
     await setSource(page, WALKER);
-    await page.getByRole('button', { name: 'Save version' }).click();
-    await expect(page.getByText(/Saved as version 1/)).toBeVisible();
+    await saveVersion(page, 'Ladder v1');
+    await expect(page.getByText(/as version 1/)).toBeVisible();
     await page.getByRole('tab', { name: 'Ranked' }).click();
     await page.getByRole('button', { name: 'Queue for ranked' }).click();
 
@@ -333,8 +381,11 @@ test.describe('ranked', () => {
 
     await page.goto('/matches');
     await page.getByLabel('Only my bots').check();
-    await expect(page.locator('.match-row').first()).toContainText('Ladder Bot');
-    await page.locator('.match-row').first().click();
+    const finished = page.locator('.card', {
+      has: page.getByRole('heading', { name: 'Finished' }),
+    });
+    await expect(finished.locator('.match-row').first()).toContainText('Ladder Bot');
+    await finished.locator('.match-row').first().click();
     await expect(page.getByText('Replay verified')).toBeVisible({ timeout: 30_000 });
     await page.getByRole('button', { name: 'Pause' }).click();
     await page.getByLabel('Playback speed').selectOption('8');

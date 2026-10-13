@@ -1,4 +1,5 @@
 import { PLAYER_COLORS, type Snapshot, TICK_MS } from '@bomberman/game-engine';
+import type { MatchSummary } from '@bomberman/protocol';
 import { Bomb, Fire, Lightning, Skull } from '@phosphor-icons/react';
 
 export interface ScoreboardEntry {
@@ -13,6 +14,16 @@ const SWATCHES: Record<(typeof PLAYER_COLORS)[number], string> = {
   blue: '#4D8DF7',
   red: '#F25555',
 };
+
+export function entriesFromSummary(summary: MatchSummary): ScoreboardEntry[] {
+  return summary.participants.map((participant) => ({
+    slot: participant.slot,
+    name: participant.botVersion
+      ? `${participant.botName} v${participant.botVersion}`
+      : participant.botName,
+    detail: participant.owner?.isHouse ? 'House bot' : participant.owner?.displayName,
+  }));
+}
 
 export function formatClock(ticks: number): string {
   const seconds = Math.max(0, Math.floor((ticks * TICK_MS) / 1000));

@@ -41,19 +41,19 @@ export function useLocalMatch(renderer: ArenaRenderer | null) {
       setStatus('loading');
       setError(null);
       const seed = options.seed ?? randomSeed();
-      const bots: WorkerBot[] = [];
+      let bots: WorkerBot[] = [];
       try {
-        for (const [index, participant] of participants.entries()) {
-          bots.push(
-            await WorkerBot.create(
-              participant.source,
-              botSeed(seed, index),
-              participant.events,
-            ).catch((loadError: Error) => {
+        const loads = participants.map((participant, index) =>
+          WorkerBot.create(participant.source, botSeed(seed, index), participant.events).catch(
+            (loadError: Error) => {
               throw new Error(`${participant.name}: ${loadError.message}`);
-            }),
-          );
-        }
+            },
+          ),
+        );
+        const settled = await Promise.allSettled(loads);
+        bots = settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
+        const failed = settled.find((result) => result.status === 'rejected');
+        if (failed) throw failed.reason;
         if (controller.signal.aborted) return;
         const state = createGame({
           seed,

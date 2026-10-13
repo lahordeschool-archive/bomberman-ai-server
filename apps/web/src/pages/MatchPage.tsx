@@ -19,7 +19,12 @@ import {
 } from '../components/ui.tsx';
 import { ArenaCanvas } from '../game/ArenaCanvas.tsx';
 import type { ArenaRenderer } from '../game/renderer.ts';
-import { formatClock, Scoreboard, type ScoreboardEntry } from '../game/Scoreboard.tsx';
+import {
+  entriesFromSummary,
+  formatClock,
+  Scoreboard,
+  type ScoreboardEntry,
+} from '../game/Scoreboard.tsx';
 import { buildTimeline, type ReplayTimeline } from '../game/timeline.ts';
 import { api, RequestError } from '../lib/api.ts';
 import { Link } from '../lib/router.tsx';
@@ -27,16 +32,6 @@ import { useSession } from '../lib/session.tsx';
 import { emitWithAck, getSocket } from '../lib/socket.ts';
 
 const SPEEDS = [1, 2, 4, 8];
-
-function entriesFromSummary(summary: MatchSummary): ScoreboardEntry[] {
-  return summary.participants.map((participant) => ({
-    slot: participant.slot,
-    name: participant.botVersion
-      ? `${participant.botName} v${participant.botVersion}`
-      : participant.botName,
-    detail: participant.owner?.isHouse ? 'House bot' : participant.owner?.displayName,
-  }));
-}
 
 function ReplayPlayer({
   timeline,

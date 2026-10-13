@@ -96,6 +96,7 @@ function PublicBotPage({ bot }: { bot: BotDetail }) {
                 <li key={version.id}>
                   <span>
                     <strong>v{version.version}</strong>{' '}
+                    {version.label ? <span className="version-label">{version.label}</span> : null}{' '}
                     <span className="muted">{formatDate(version.createdAt)}</span>
                     {version.id === bot.activeVersion?.id ? (
                       <span className="badge">Active</span>

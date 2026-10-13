@@ -98,8 +98,9 @@ export async function buildApp(
   if (existsSync(indexFile)) {
     await app.register(fastifyStatic, {
       root: config.webDist,
-      wildcard: false,
-      index: false,
+      // Resolve files per request so a rebuilt client is served without a restart.
+      wildcard: true,
+      index: 'index.html',
       cacheControl: false,
       setHeaders(reply, path) {
         if (/[\\/]assets[\\/]/.test(path)) {

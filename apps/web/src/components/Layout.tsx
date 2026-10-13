@@ -42,7 +42,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <header className="nav-wrap">
         <nav className="nav" aria-label="Main">
           <Link to="/" className="brand">
-            <img src="/favicon.png" alt="" width={20} height={20} />
+            <img src="/logo.png" alt="" width={20} height={20} />
             Bomber Arena
           </Link>
           <div className="nav-links">

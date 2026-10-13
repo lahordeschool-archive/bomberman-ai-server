@@ -1,7 +1,10 @@
 import type { LeaderboardEntry } from '@bomberman/protocol';
 import type { Queryable } from '../db/database.ts';
 
-/** Only bots with at least one server-completed ranked match appear on the ladder. */
+/**
+ * Bots that played at least one ranked match, plus queued bots still waiting for their first
+ * one. Unplayed bots come last: their 1200 starting rating says nothing yet.
+ */
 export async function getLeaderboard(
   db: Queryable,
   limit: number,
@@ -10,7 +13,7 @@ export async function getLeaderboard(
   const from = `from ratings r
     join bots b on b.id = r.bot_id and b.deleted_at is null
     join users u on u.id = b.owner_id
-    where r.games > 0`;
+    where r.games > 0 or exists (select 1 from ranked_queue q where q.bot_id = r.bot_id)`;
   const total = await db.query<{ count: number }>(`select count(*)::int as count ${from}`);
   const { rows } = await db.query<{
     bot_id: string;
@@ -24,7 +27,7 @@ export async function getLeaderboard(
   }>(
     `select r.bot_id, b.name, u.username, u.display_name, u.is_house, r.rating, r.games, r.wins
      ${from}
-     order by r.rating desc, r.games desc, b.created_at asc
+     order by r.games > 0 desc, r.rating desc, r.games desc, b.created_at asc
      limit $1 offset $2`,
     [limit, offset],
   );

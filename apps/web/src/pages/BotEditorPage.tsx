@@ -1,11 +1,13 @@
 import {
   DECISION_BUDGET_MS,
+  getSampleBot,
+  randomSampleBots,
   SAMPLE_BOTS,
   STARTER_SOURCE,
   type BotLogLine,
 } from '@bomberman/bot-sdk';
 import { DEFAULT_MAX_TICKS } from '@bomberman/game-engine';
-import type { BotDetail, RankedStatus } from '@bomberman/protocol';
+import type { BotDetail, BotSummary, RankedStatus } from '@bomberman/protocol';
 import {
   ArrowCounterClockwise,
   ArrowsIn,
@@ -34,10 +36,12 @@ import {
   Button,
   Card,
   ErrorMessage,
+  Field,
   formatDate,
   formatRating,
   Skeleton,
 } from '../components/ui.tsx';
+import { Modal } from '../components/Modal.tsx';
 import type { WorkerBotEvents } from '../bots/worker-bot.ts';
 import { ArenaCanvas } from '../game/ArenaCanvas.tsx';
 import type { ArenaRenderer } from '../game/renderer.ts';
@@ -49,7 +53,31 @@ import { Link, useRouter } from '../lib/router.tsx';
 import { useSession } from '../lib/session.tsx';
 
 const CodeEditor = lazy(() => import('../components/CodeEditor.tsx'));
-const ACTIVE_VERSION = 'active-version';
+const RANDOM = 'random';
+const STARTER = 'starter';
+
+/** A saved version of one of your bots, usable as editor content or as an opponent. */
+interface SavedCode {
+  key: string;
+  botId: string;
+  versionId: string;
+  label: string;
+}
+
+const savedKey = (botId: string, versionId: string) => `v:${botId}:${versionId}`;
+const versionName = (version: { version: number; label: string | null }) =>
+  version.label ? `v${version.version} · ${version.label}` : `v${version.version}`;
+const isSaved = (key: string) => key.startsWith('v:');
+
+/** Replaces each random seat with a distinct house bot when possible. */
+function drawOpponents(slugs: readonly string[]): string[] {
+  const pool = randomSampleBots(SAMPLE_BOTS.length)
+    .map((sample) => sample.slug)
+    .filter((slug) => !slugs.includes(slug));
+  return slugs.map((slug) =>
+    slug === RANDOM ? (pool.shift() ?? randomSampleBots(1)[0]!.slug) : slug,
+  );
+}
 const MAX_CONSOLE_LINES = 300;
 const EXPANDED_KEY = 'bomber:editor-expanded';
 
@@ -59,6 +87,10 @@ function draftKey(botId: string) {
   return `bomber:draft:${botId}`;
 }
 
+function loadedCodeKey(botId: string) {
+  return `bomber:loaded-code:${botId}`;
+}
+
 export default function BotEditorPage({ botId }: { botId: string }) {
   const { navigate } = useRouter();
   const { user } = useSession();
@@ -66,13 +98,21 @@ export default function BotEditorPage({ botId }: { botId: string }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [source, setSource] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<string | null>(null);
+  const [otherBots, setOtherBots] = useState<BotSummary[]>([]);
+  const [savedSources, setSavedSources] = useState<Record<string, string>>({});
   const [lines, setLines] = useState<ConsoleLine[]>([]);
   const [renderer, setRenderer] = useState<ArenaRenderer | null>(null);
   const [muted, setMuted] = useState(true);
   const [panel, setPanel] = useState<Panel>('test');
-  const [opponents, setOpponents] = useState<string[]>(['cautious-bomber', 'random-walker']);
+  const [opponents, setOpponents] = useState<string[]>([RANDOM, RANDOM, RANDOM]);
+  const [drawn, setDrawn] = useState<string[] | null>(null);
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [submitting, setSubmitting] = useState(false);
+  /** Name typed in the save dialog; null while the dialog is closed. */
+  const [saveLabel, setSaveLabel] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  /** Option of the code dropdown last loaded into the editor; defaults to the active version. */
+  const [loadedKey, setLoadedKey] = useState(() => localStorage.getItem(loadedCodeKey(botId)));
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [ranked, setRanked] = useState<RankedStatus | null>(null);
@@ -123,9 +163,72 @@ export default function BotEditorPage({ botId }: { botId: string }) {
     if (detail.activeVersion) {
       active = (await api.version(botId, detail.activeVersion.id)).source;
       setActiveSource(active);
+      if (active !== null) {
+        const key = savedKey(botId, detail.activeVersion.id);
+        setSavedSources((current) => ({ ...current, [key]: active! }));
+      }
     }
     return { detail, active };
   }, [botId]);
+
+  useEffect(() => {
+    api.myBots().then(
+      ({ bots }) => setOtherBots(bots.filter((other) => other.id !== botId && other.activeVersion)),
+      () => undefined,
+    );
+  }, [botId]);
+
+  const savedCode = useMemo<{ own: SavedCode[]; others: SavedCode[] }>(
+    () => ({
+      own: (bot?.versions ?? []).map((version) => ({
+        key: savedKey(botId, version.id),
+        botId,
+        versionId: version.id,
+        label: `${versionName(version)}${version.id === bot!.activeVersion?.id ? ' (active)' : ''}`,
+      })),
+      others: otherBots.map((other) => ({
+        key: savedKey(other.id, other.activeVersion!.id),
+        botId: other.id,
+        versionId: other.activeVersion!.id,
+        label: `${other.name}: ${versionName(other.activeVersion!)}`,
+      })),
+    }),
+    [bot, botId, otherBots],
+  );
+  const selectedCode = useMemo(() => {
+    const available = new Set([
+      STARTER,
+      ...SAMPLE_BOTS.map((sample) => sample.slug),
+      ...savedCode.own.map((entry) => entry.key),
+      ...savedCode.others.map((entry) => entry.key),
+    ]);
+    if (loadedKey && available.has(loadedKey)) return loadedKey;
+    return bot?.activeVersion ? savedKey(botId, bot.activeVersion.id) : STARTER;
+  }, [bot, botId, loadedKey, savedCode]);
+  const findSaved = useCallback(
+    (key: string) => [...savedCode.own, ...savedCode.others].find((entry) => entry.key === key),
+    [savedCode],
+  );
+
+  /** Fetches (once) the source of saved versions; returns the updated cache. */
+  const fetchSaved = useCallback(
+    async (keys: readonly string[]) => {
+      const cache = { ...savedSources };
+      await Promise.all(
+        keys
+          .filter((key) => isSaved(key) && cache[key] === undefined)
+          .map(async (key) => {
+            const entry = findSaved(key);
+            if (!entry) return;
+            const version = await api.version(entry.botId, entry.versionId);
+            if (version.source !== null) cache[key] = version.source;
+          }),
+      );
+      setSavedSources(cache);
+      return cache;
+    },
+    [savedSources, findSaved],
+  );
 
   useEffect(() => {
     refresh()
@@ -156,44 +259,131 @@ export default function BotEditorPage({ botId }: { botId: string }) {
   const ownSlot = casual.match ? casual.match.slot : 0;
   useEffect(() => renderer?.setHighlighted([ownSlot]), [renderer, ownSlot]);
 
-  const participants = useMemo(() => {
-    const list = [
-      { name: bot?.name ?? 'Your bot', source: source ?? '', detail: 'Draft', events: botEvents },
-    ];
-    for (const slug of opponents) {
-      if (slug === ACTIVE_VERSION && activeSource) {
-        list.push({
-          name: `${bot?.name} v${bot?.activeVersion?.version}`,
-          source: activeSource,
-          detail: 'Active version',
-          events: {},
-        });
-      } else {
-        const sample = SAMPLE_BOTS.find((candidate) => candidate.slug === slug);
-        if (sample)
-          list.push({ name: sample.name, source: sample.source, detail: 'Sample bot', events: {} });
+  const buildParticipants = useCallback(
+    (slugs: readonly string[], cache: Record<string, string> = savedSources) => {
+      const list = [
+        { name: bot?.name ?? 'Your bot', source: source ?? '', detail: 'Draft', events: botEvents },
+      ];
+      for (const slug of slugs) {
+        if (slug === RANDOM) {
+          list.push({ name: 'Random house bot', source: '', detail: 'Drawn at start', events: {} });
+        } else if (isSaved(slug)) {
+          const entry = findSaved(slug);
+          if (entry) {
+            list.push({
+              name: entry.label.replace(' (active)', ''),
+              source: cache[slug] ?? '',
+              detail: 'Saved version',
+              events: {},
+            });
+          }
+        } else {
+          const sample = SAMPLE_BOTS.find((candidate) => candidate.slug === slug);
+          if (sample)
+            list.push({
+              name: sample.name,
+              source: sample.source,
+              detail: 'Sample bot',
+              events: {},
+            });
+        }
       }
-    }
-    return list;
-  }, [bot, source, opponents, activeSource, botEvents]);
+      return list;
+    },
+    [bot, source, savedSources, findSaved, botEvents],
+  );
+  const participants = useMemo(
+    () => buildParticipants(drawn ?? opponents),
+    [buildParticipants, drawn, opponents],
+  );
 
-  function runTest() {
+  async function runTest() {
     casual.leave();
-    log('system', `Starting a local match against ${participants.length - 1} opponents.`);
-    void local.start(participants);
+    const lineup = drawOpponents(opponents);
+    let cache: Record<string, string>;
+    try {
+      cache = await fetchSaved(lineup);
+    } catch (failure) {
+      setActionError((failure as Error).message);
+      return;
+    }
+    const players = buildParticipants(lineup, cache);
+    log(
+      'system',
+      `Starting a local match against ${players
+        .slice(1)
+        .map((p) => p.name)
+        .join(', ')}.`,
+    );
+    setDrawn(lineup);
+    void local.start(players);
   }
 
-  async function submit() {
-    if (!source) return;
+  /** Replaces the editor content, asking first when it would discard unsaved work. */
+  function replaceSource(next: string, label: string): boolean {
+    if (next === source) return false;
+    const knownCode = new Set([STARTER_SOURCE, ...Object.values(savedSources)]);
+    if (activeSource) knownCode.add(activeSource);
+    const unsaved = source !== null && !knownCode.has(source);
+    if (
+      unsaved &&
+      !window.confirm(
+        `Replace the editor content with ${label}? Your unsaved draft will be lost; saved versions are kept.`,
+      )
+    ) {
+      return false;
+    }
+    setSource(next);
+    return true;
+  }
+
+  function rememberLoaded(key: string) {
+    setLoadedKey(key);
+    localStorage.setItem(loadedCodeKey(botId), key);
+  }
+
+  async function loadCode(key: string) {
+    setActionError(null);
+    if (isSaved(key)) {
+      const entry = findSaved(key);
+      if (!entry) return;
+      try {
+        const cache = await fetchSaved([key]);
+        if (cache[key] !== undefined && replaceSource(cache[key], entry.label)) {
+          rememberLoaded(key);
+          log('system', `Loaded ${entry.label} into the editor.`);
+        }
+      } catch (failure) {
+        setActionError((failure as Error).message);
+      }
+      return;
+    }
+    const template =
+      key === STARTER ? { name: 'Starter', source: STARTER_SOURCE } : getSampleBot(key);
+    if (template && replaceSource(template.source, `the ${template.name} template`)) {
+      rememberLoaded(key);
+      log('system', `Loaded the ${template.name} template. Save a version to use it in ranked.`);
+    }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const label = saveLabel?.trim() ?? '';
+    if (!source || !label) return;
     setSubmitting(true);
+    setSaveError(null);
     setActionError(null);
     setNotice(null);
     try {
-      const version = await api.submitVersion(botId, source, visibility);
+      const version = await api.submitVersion(botId, { source, visibility, label });
       await refresh();
-      setNotice(`Saved as version ${version.version}. It is now the version used for ranked play.`);
+      rememberLoaded(savedKey(botId, version.id));
+      setSaveLabel(null);
+      setNotice(
+        `Saved “${label}” as version ${version.version}. It is now the version used for ranked play.`,
+      );
     } catch (failure) {
-      setActionError((failure as Error).message);
+      setSaveError((failure as Error).message);
     } finally {
       setSubmitting(false);
     }
@@ -205,18 +395,6 @@ export default function BotEditorPage({ botId }: { botId: string }) {
       const next = bot?.queued ? await api.dequeue(botId) : await api.enqueue(botId);
       setRanked(next);
       await refresh();
-    } catch (failure) {
-      setActionError((failure as Error).message);
-    }
-  }
-
-  async function loadVersion(versionId: string) {
-    try {
-      const version = await api.version(botId, versionId);
-      if (version.source !== null) {
-        setSource(version.source);
-        log('system', `Loaded version ${version.version} into the editor.`);
-      }
     } catch (failure) {
       setActionError((failure as Error).message);
     }
@@ -243,6 +421,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
     try {
       await api.deleteBot(botId);
       localStorage.removeItem(draftKey(botId));
+      localStorage.removeItem(loadedCodeKey(botId));
       navigate('/');
     } catch (failure) {
       setActionError((failure as Error).message);
@@ -315,20 +494,6 @@ export default function BotEditorPage({ botId }: { botId: string }) {
             </h1>
           )}
         </div>
-        <div className="editor-header-meta mono">
-          {bot?.activeVersion ? (
-            <span>v{bot.activeVersion.version}</span>
-          ) : (
-            <span>No version yet</span>
-          )}
-          {source !== null && source !== (activeSource ?? STARTER_SOURCE) ? (
-            <span className="badge" title="The editor differs from the active version">
-              Unsaved changes
-            </span>
-          ) : null}
-          {bot?.rating ? <span>{formatRating(bot.rating.rating)} rating</span> : null}
-          {bot?.queued ? <span className="badge badge-live">Queued</span> : null}
-        </div>
       </header>
 
       <div className="editor-layout">
@@ -336,16 +501,68 @@ export default function BotEditorPage({ botId }: { botId: string }) {
           <div className="editor-toolbar">
             <Button
               variant="primary"
-              icon={running ? <ArrowCounterClockwise /> : <Play />}
+              className="button-icon"
+              icon={running ? <ArrowCounterClockwise /> : <Play weight="fill" />}
               onClick={runTest}
               disabled={source === null}
+              aria-label={running ? 'Restart test' : 'Run test'}
+              title={running ? 'Restart the local test' : 'Run a local test'}
+            />
+            <Button
+              className="button-icon"
+              icon={<Stop />}
+              onClick={local.stop}
+              disabled={!running}
+              aria-label="Stop"
+              title="Stop the local test"
+            />
+            <select
+              className="template-select"
+              aria-label="Load code"
+              title="Code loaded in the editor"
+              value={selectedCode}
+              disabled={source === null}
+              onChange={(event) => void loadCode(event.target.value)}
             >
-              {running ? 'Restart test' : 'Run test'}
-            </Button>
-            <Button icon={<Stop />} onClick={local.stop} disabled={!running}>
-              Stop
-            </Button>
+              <optgroup label="Templates">
+                <option value={STARTER}>Starter: minimal random mover</option>
+                {SAMPLE_BOTS.map((sample) => (
+                  <option key={sample.slug} value={sample.slug} title={sample.description}>
+                    {sample.name}: {sample.description}
+                  </option>
+                ))}
+              </optgroup>
+              {savedCode.own.length > 0 ? (
+                <optgroup label="Saved versions of this bot">
+                  {savedCode.own.map((entry) => (
+                    <option key={entry.key} value={entry.key}>
+                      {entry.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {savedCode.others.length > 0 ? (
+                <optgroup label="Your other bots">
+                  {savedCode.others.map((entry) => (
+                    <option key={entry.key} value={entry.key}>
+                      {entry.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+            </select>
             <span className="toolbar-spacer" />
+            <Button
+              className="button-icon"
+              icon={<CloudArrowUp />}
+              onClick={() => {
+                setSaveError(null);
+                setSaveLabel('');
+              }}
+              disabled={source === null}
+              aria-label="Save version"
+              title="Save a new version"
+            />
             <button
               type="button"
               className="icon-button"
@@ -356,22 +573,6 @@ export default function BotEditorPage({ botId }: { botId: string }) {
             >
               {expanded ? <ArrowsIn /> : <ArrowsOut />}
             </button>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={visibility === 'public'}
-                onChange={(event) => setVisibility(event.target.checked ? 'public' : 'private')}
-              />
-              Public source
-            </label>
-            <Button
-              icon={<CloudArrowUp />}
-              onClick={submit}
-              busy={submitting}
-              disabled={source === null}
-            >
-              Save version
-            </Button>
           </div>
           {source === null ? (
             <Skeleton lines={12} />
@@ -390,6 +591,20 @@ export default function BotEditorPage({ botId }: { botId: string }) {
         </div>
 
         <div className="arena-column">
+          <div className="editor-header-meta mono">
+            {bot?.activeVersion ? (
+              <span>v{bot.activeVersion.version}</span>
+            ) : (
+              <span>No version yet</span>
+            )}
+            {source !== null && source !== (activeSource ?? STARTER_SOURCE) ? (
+              <span className="badge" title="The editor differs from the active version">
+                Unsaved changes
+              </span>
+            ) : null}
+            {bot?.rating ? <span>{formatRating(bot.rating.rating)} rating</span> : null}
+            {bot?.queued ? <span className="badge badge-live">Queued</span> : null}
+          </div>
           <div className="arena-frame">
             <ArenaCanvas onReady={setRenderer} label="Match arena" />
             <button
@@ -445,17 +660,27 @@ export default function BotEditorPage({ botId }: { botId: string }) {
                       if (event.target.value) next[index] = event.target.value;
                       else next.splice(index, 1);
                       setOpponents(next.filter(Boolean));
+                      setDrawn(null);
                     }}
                     disabled={index > opponents.length}
                   >
                     {index > 0 ? <option value="">None</option> : null}
-                    {SAMPLE_BOTS.map((sample) => (
-                      <option key={sample.slug} value={sample.slug}>
-                        {sample.name}
-                      </option>
-                    ))}
-                    {activeSource ? (
-                      <option value={ACTIVE_VERSION}>Your active version</option>
+                    <option value={RANDOM}>Random house bot</option>
+                    <optgroup label="House bots">
+                      {SAMPLE_BOTS.map((sample) => (
+                        <option key={sample.slug} value={sample.slug}>
+                          {sample.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    {savedCode.own.length + savedCode.others.length > 0 ? (
+                      <optgroup label="Your saved versions">
+                        {[...savedCode.own, ...savedCode.others].map((entry) => (
+                          <option key={entry.key} value={entry.key}>
+                            {entry.label}
+                          </option>
+                        ))}
+                      </optgroup>
                     ) : null}
                   </select>
                 </label>
@@ -516,9 +741,11 @@ export default function BotEditorPage({ botId }: { botId: string }) {
                         onClick={() => {
                           local.stop();
                           void casual.start(
-                            opponents
-                              .filter((slug) => slug !== ACTIVE_VERSION)
-                              .slice(0, 4 - casual.lobby!.members.length),
+                            drawOpponents(
+                              opponents
+                                .filter((slug) => !isSaved(slug))
+                                .slice(0, 4 - casual.lobby!.members.length),
+                            ),
                           );
                         }}
                         disabled={casual.lobby.members.length + opponents.length < 2}
@@ -534,7 +761,8 @@ export default function BotEditorPage({ botId }: { botId: string }) {
                     </Link>
                   ) : null}
                   <p className="field-hint">
-                    Empty seats are filled with the sample bots picked in Local test.
+                    Empty seats are filled with the opponents picked in Local test (random house
+                    bots by default).
                   </p>
                 </div>
               )}
@@ -581,6 +809,9 @@ export default function BotEditorPage({ botId }: { botId: string }) {
                     <li key={version.id}>
                       <span>
                         <strong>v{version.version}</strong>{' '}
+                        {version.label ? (
+                          <span className="version-label">{version.label}</span>
+                        ) : null}{' '}
                         <span className="muted">{formatDate(version.createdAt)}</span>
                         {version.id === bot.activeVersion?.id ? (
                           <span className="badge">Active</span>
@@ -589,7 +820,10 @@ export default function BotEditorPage({ botId }: { botId: string }) {
                           <span className="badge">Public</span>
                         ) : null}
                       </span>
-                      <Button variant="ghost" onClick={() => loadVersion(version.id)}>
+                      <Button
+                        variant="ghost"
+                        onClick={() => void loadCode(savedKey(botId, version.id))}
+                      >
                         Load
                       </Button>
                     </li>
@@ -605,6 +839,50 @@ export default function BotEditorPage({ botId }: { botId: string }) {
           ) : null}
         </div>
       </div>
+
+      <Modal
+        open={saveLabel !== null}
+        title="Save a version"
+        onClose={() => {
+          if (!submitting) setSaveLabel(null);
+        }}
+      >
+        <form onSubmit={submit}>
+          <Field
+            label="Version name"
+            value={saveLabel ?? ''}
+            onChange={(event) => setSaveLabel(event.target.value)}
+            placeholder="Bombs only when cornered"
+            maxLength={60}
+            required
+            autoFocus
+            hint={`Saved as v${(bot?.versions[0]?.version ?? 0) + 1}. It becomes the version used for ranked play.`}
+          />
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={visibility === 'public'}
+              onChange={(event) => setVisibility(event.target.checked ? 'public' : 'private')}
+            />
+            Public source: anyone can read this version
+          </label>
+          <ErrorMessage>{saveError}</ErrorMessage>
+          <div className="modal-actions">
+            <Button onClick={() => setSaveLabel(null)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              icon={<CloudArrowUp />}
+              busy={submitting}
+              disabled={!saveLabel?.trim()}
+            >
+              Save version
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

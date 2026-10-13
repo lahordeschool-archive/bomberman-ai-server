@@ -61,6 +61,12 @@ export const submitVersionBody = z.object({
     .min(1)
     .max(64 * 1024),
   visibility: visibilitySchema.default('private'),
+  label: z
+    .string()
+    .trim()
+    .max(60)
+    .optional()
+    .transform((label) => label || null),
 });
 
 export const paginationQuery = z.object({
@@ -92,7 +98,7 @@ export interface BotSummary {
   id: string;
   name: string;
   owner: { username: string; displayName: string; isHouse: boolean };
-  activeVersion: { id: string; version: number; createdAt: string } | null;
+  activeVersion: { id: string; version: number; label: string | null; createdAt: string } | null;
   rating: { rating: number; games: number; wins: number } | null;
   queued: boolean;
   createdAt: string;
@@ -101,6 +107,7 @@ export interface BotSummary {
 export interface BotVersionSummary {
   id: string;
   version: number;
+  label: string | null;
   sourceHash: string;
   sdkVersion: number;
   visibility: 'private' | 'public';

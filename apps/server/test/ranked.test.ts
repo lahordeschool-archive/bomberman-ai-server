@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import { SAMPLE_BOTS } from '@bomberman/bot-sdk';
-import { hashState, runReplay } from '@bomberman/game-engine';
+import { hashState, MAX_PLAYERS, runReplay } from '@bomberman/game-engine';
 import {
   decodeIntent,
   type ClientToServerEvents,
@@ -94,7 +94,7 @@ describe('ranked matches', () => {
       return response.body.status === 'completed' ? response.body : null;
     });
     expect(match.kind).toBe('ranked');
-    expect(match.participants).toHaveLength(1 + context.house.length);
+    expect(match.participants).toHaveLength(Math.min(MAX_PLAYERS, 1 + context.house.length));
     const mine = match.participants.find(
       (participant: { botId: string }) => participant.botId === bot.body.id,
     );

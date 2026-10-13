@@ -24,7 +24,7 @@ export function Button({
       className={['button', `button-${variant}`, className].filter(Boolean).join(' ')}
     >
       {icon}
-      <span>{children}</span>
+      {children === undefined ? null : <span>{children}</span>}
     </button>
   );
 }
