@@ -70,7 +70,10 @@ live on internal networks.
 On **Coolify** (or any host whose proxy already owns ports 80/443), point the
 resource at `docker-compose.coolify.yml` instead: same stack without Caddy. Give the
 `server` service your domain with its container port (`https://bomber.example.com:8080`)
-and set `PUBLIC_ORIGIN`, `POSTGRES_PASSWORD`, and `RUNNER_TOKEN`.
+and set `PUBLIC_ORIGIN`, `POSTGRES_PASSWORD`, and `RUNNER_TOKEN`. Without a real
+domain, use `http://bomber.<server-ip>.sslip.io:8080`: the domains Coolify generates
+from a hostname such as `vps-7a227f8f.vps.ovh.net` resolve to the wrong address,
+because sslip.io reads the hex part as an IP.
 
 See [docs/operations.md](docs/operations.md) for the
 runbook: configuration, backups, upgrades, and incident handling.
