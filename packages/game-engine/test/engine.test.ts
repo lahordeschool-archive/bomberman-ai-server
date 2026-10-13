@@ -161,7 +161,7 @@ describe('bombs and flames', () => {
     expect(state.result!.reason).toBe('lastStanding');
   });
 
-  it('does not credit self kills and records a draw when everyone dies together', () => {
+  it('does not credit self kills, and gives a double knockout to the player with the kill', () => {
     const state = emptyArena(2);
     state.players[1]!.x = 2;
     state.players[1]!.y = 1;
@@ -169,6 +169,17 @@ describe('bombs and flames', () => {
     step(state);
     expect(state.players[0]!.killedBy).toBeNull();
     expect(state.players[0]!.stats.kills).toBe(1);
+    expect(state.result!.winnerId).toBe(0);
+    expect(state.result!.players.map((player) => player.placement)).toEqual([1, 2]);
+  });
+
+  it('records a draw when everyone dies together under engine v3', () => {
+    const state = createGame({ seed: 1, playerCount: 2, engineVersion: 3 });
+    state.grid = state.grid.map((cell) => (cell === Cell.Soft ? Cell.Floor : cell));
+    state.players[1]!.x = 2;
+    state.players[1]!.y = 1;
+    state.bombs.push({ id: 7, ownerId: 0, x: 1, y: 1, fuse: 1, range: 2 });
+    step(state);
     expect(state.result!.winnerId).toBeNull();
     expect(state.result!.players.map((player) => player.placement)).toEqual([1, 1]);
   });
@@ -234,6 +245,48 @@ describe('timeouts and scoring', () => {
     expect(state.tick).toBe(30);
     expect(state.result).toMatchObject({ reason: 'timeout', winnerId: 1, endTick: 29 });
     expect(state.result!.players.map((player) => player.placement)).toEqual([2, 1, 3]);
+  });
+
+  it('breaks equal survivor scores by kills, then walls, then items', () => {
+    const state = emptyArena(4, { maxTicks: 10 });
+    // 100 points each: one kill, twenty walls, ten items, and ten items again.
+    state.players[0]!.stats.wallsDestroyed = 20;
+    state.players[1]!.stats.kills = 1;
+    state.players[2]!.stats.itemsCollected = 10;
+    state.players[3]!.stats.itemsCollected = 10;
+    stepN(state, 20, step);
+    expect(state.result!.players.map((player) => player.score)).toEqual([100, 100, 100, 100]);
+    expect(state.result!.players.map((player) => player.placement)).toEqual([2, 1, 3, 3]);
+    expect(state.result!.winnerId).toBe(1);
+  });
+
+  it('breaks a tie between players who died on the same tick by score', () => {
+    const state = emptyArena(3, { maxTicks: 10 });
+    for (const id of [1, 2]) {
+      state.players[id]!.alive = false;
+      state.players[id]!.diedAtTick = 4;
+    }
+    state.players[2]!.stats.wallsDestroyed = 1;
+    stepN(state, 20, step);
+    expect(state.result!.players.map((player) => player.placement)).toEqual([1, 3, 2]);
+  });
+
+  it('keeps fully equal players tied, and older engines without tiebreakers', () => {
+    const tied = emptyArena(2, { maxTicks: 10 });
+    stepN(tied, 20, step);
+    expect(tied.result!.winnerId).toBeNull();
+
+    const legacy = createGame({
+      seed: 1,
+      playerCount: 2,
+      engineVersion: 3,
+      settings: { maxTicks: 10 },
+    });
+    legacy.players[0]!.stats.wallsDestroyed = 20;
+    legacy.players[1]!.stats.kills = 1;
+    stepN(legacy, 20, step);
+    expect(legacy.result!.players.map((player) => player.placement)).toEqual([1, 1]);
+    expect(legacy.result!.winnerId).toBeNull();
   });
 
   it('snapshots expose interpolated positions and only visible items', () => {

@@ -31,23 +31,23 @@ A move requested while one is in progress is queued.
 
 Your speed sets how often you play. Each turn is one decision and at most one tile:
 
-| `speed` | How you get there        | Turn (`obs.decisionIntervalTicks`) | Answer within |
-| ------- | ------------------------ | ---------------------------------- | ------------- |
-| 0       | picked up a `speedDown`  | 8 ticks (400 ms)                   | 240 ms        |
-| 1       | starting speed           | 6 ticks (300 ms)                   | 240 ms        |
-| 2       | one `speedUp`            | 5 ticks (250 ms)                   | 240 ms        |
-| 3 (max) | two or more `speedUp`    | 4 ticks (200 ms)                   | 190 ms        |
+| `speed` | How you get there       | Turn (`obs.decisionIntervalTicks`) | Answer within |
+| ------- | ----------------------- | ---------------------------------- | ------------- |
+| 0       | picked up a `speedDown` | 8 ticks (400 ms)                   | 240 ms        |
+| 1       | starting speed          | 6 ticks (300 ms)                   | 240 ms        |
+| 2       | one `speedUp`           | 5 ticks (250 ms)                   | 240 ms        |
+| 3 (max) | two or more `speedUp`   | 4 ticks (200 ms)                   | 190 ms        |
 
 You need no code for it: `gameLoop` is just called more (or less) often. A faster
 player outruns blasts and reaches items first, and gets less time per answer.
 
-| Item        | Effect                                                             |
-| ----------- | ------------------------------------------------------------------ |
-| `extraBomb` | +1 bomb on the board at a time (max 10)                            |
-| `flameUp`   | +1 blast range (max 10)                                            |
-| `maxFlame`  | blast range jumps to 10: rare, and your bombs now cross the map    |
-| `speedUp`   | roller skates: +1 speed, up to 3                                   |
-| `speedDown` | -1 speed, down to 0: you play every 400 ms instead of 300 ms       |
+| Item        | Effect                                                          |
+| ----------- | --------------------------------------------------------------- |
+| `extraBomb` | +1 bomb on the board at a time (max 10)                         |
+| `flameUp`   | +1 blast range (max 10)                                         |
+| `maxFlame`  | blast range jumps to 10: rare, and your bombs now cross the map |
+| `speedUp`   | roller skates: +1 speed, up to 3                                |
+| `speedDown` | -1 speed, down to 0: you play every 400 ms instead of 300 ms    |
 
 Every pickup scores 10 points, even when you are already at the cap. Your current
 values are in `obs.me` (`bombCapacity`, `bombsAvailable`, `flameRange`, `speed`,
@@ -159,7 +159,9 @@ Item types: `extraBomb`, `flameUp`, `maxFlame`, `speedUp`, `speedDown` (see
 - When a player dies, the power ups they collected are scattered on free tiles.
 - A match ends when one bot (or none) is left, or after `maxTicks` (3 minutes).
   Survivors rank above the dead and are ordered by score
-  (kill 100, wall 5, item 10); the dead are ordered by survival time.
+  (kill 100, wall 5, item 10); the dead are ordered by survival time, then score.
+  Equal scores fall back to kills, then walls destroyed, then items collected. Only
+  players equal on all of these share a place, and a shared first place is a draw.
 
 ## Limits
 

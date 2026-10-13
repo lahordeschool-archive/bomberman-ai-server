@@ -2,10 +2,11 @@
  * v1: every bot plays every 5 ticks and speed only shortens moves.
  * v2: speed sets each player's own turn interval (`TURN_TICKS_BY_SPEED_V2`).
  * v3: same rules at the legacy pace (`TURN_TICKS_BY_SPEED`).
+ * v4: v3 plus tiebreakers on equal scores (kills, then walls, then items).
  */
-export const ENGINE_VERSION = 3;
+export const ENGINE_VERSION = 4;
 /** Versions `runReplay` can still re-simulate. */
-export const SUPPORTED_ENGINE_VERSIONS: readonly number[] = [1, 2, 3];
+export const SUPPORTED_ENGINE_VERSIONS: readonly number[] = [1, 2, 3, 4];
 
 export const TICK_MS = 50;
 export const GRID_WIDTH = 15;

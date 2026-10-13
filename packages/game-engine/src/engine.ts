@@ -411,18 +411,33 @@ export function playerScore(player: PlayerState): number {
   );
 }
 
+function rankKey(player: PlayerState, engineVersion: number): number[] {
+  const key = player.alive ? [1, playerScore(player)] : [0, player.diedAtTick ?? -1];
+  if (engineVersion < 4) return key;
+  const { kills, wallsDestroyed, itemsCollected } = player.stats;
+  return player.alive
+    ? [...key, kills, wallsDestroyed, itemsCollected]
+    : [...key, playerScore(player), kills, wallsDestroyed, itemsCollected];
+}
+
 /**
  * Survivors rank above the dead; survivors are ordered by score, the dead by how
- * long they survived. Equal keys share a placement (competition ranking: 1, 1, 3).
+ * long they survived. From engine v4, ties fall back to kills, walls destroyed, then
+ * items collected (the dead first compare scores). Equal keys share a placement
+ * (competition ranking: 1, 1, 3), and a shared first place is a draw.
  */
 export function computeResult(state: GameState, reason: MatchResult['reason']): MatchResult {
   const rows = state.players.map((player) => ({
     player,
-    score: playerScore(player),
-    key: player.alive ? [1, playerScore(player)] : [0, player.diedAtTick ?? -1],
+    key: rankKey(player, state.engineVersion),
   }));
-  const compare = (a: (typeof rows)[number], b: (typeof rows)[number]) =>
-    b.key[0]! - a.key[0]! || b.key[1]! - a.key[1]!;
+  const compare = (a: (typeof rows)[number], b: (typeof rows)[number]) => {
+    for (let index = 0; index < a.key.length; index++) {
+      const difference = b.key[index]! - a.key[index]!;
+      if (difference !== 0) return difference;
+    }
+    return 0;
+  };
   const sorted = [...rows].sort((a, b) => compare(a, b) || a.player.id - b.player.id);
   const placements = new Map<number, number>();
   sorted.forEach((row, index) => {

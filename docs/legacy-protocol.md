@@ -80,6 +80,7 @@ these rules unless a deviation is listed at the end. The rule parity tests in
 - Bomb fuse is 50 ticks (2.5 s) and flames last 10 ticks (0.5 s).
 - Flame range is capped at 10 (max flame sets it to the cap).
 - Matches last 3 minutes. At timeout, survivors are ranked by score instead of
-  bombs placed or randomness; ties stay ties.
+  bombs placed or randomness; equal scores fall back to kills, walls, then items,
+  and players equal on all of them stay tied.
 - The bot observation is grid based (`docs/bot-sdk.md`), not pixel based.
 - Lobby chat, colours, and stage selection are removed.
