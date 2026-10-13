@@ -28,7 +28,23 @@ describe('loadConfig', () => {
     expect(config.cookieSecure).toBe(false);
   });
 
-  it('explains what is missing in production', () => {
+  it('tolerates quotes and lists of domains', () => {
+    expect(
+      loadConfig({ ...production, PUBLIC_ORIGIN: '"https://a.example.com"' }).publicOrigin,
+    ).toBe('https://a.example.com');
+    expect(
+      loadConfig({ ...production, PUBLIC_ORIGIN: 'https://a.example.com,https://b.example.com' })
+        .publicOrigin,
+    ).toBe('https://a.example.com');
+  });
+
+  it('explains what is missing or wrong in production, showing the public origin it got', () => {
     expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow(/RUNNER_TOKEN|DATABASE_URL/);
+    expect(() => loadConfig({ ...production, PUBLIC_ORIGIN: '' })).toThrow(
+      /PUBLIC_ORIGIN: Required in production/,
+    );
+    expect(() => loadConfig({ ...production, PUBLIC_ORIGIN: 'https://bad host' })).toThrow(
+      /got "https:\/\/bad host"/,
+    );
   });
 });

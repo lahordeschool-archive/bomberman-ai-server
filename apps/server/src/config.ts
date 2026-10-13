@@ -4,11 +4,20 @@ import { z } from 'zod';
 
 const DEV_RUNNER_TOKEN = 'dev-only-runner-token';
 
-/** Accepts `bomber.example.com` (as hosting panels often fill it) as `https://bomber.example.com`. */
-const withScheme = (value: unknown) =>
-  typeof value === 'string' && value.trim() && !/^[a-z][a-z0-9+.-]*:\/\//i.test(value.trim())
-    ? `https://${value.trim()}`
-    : value;
+/**
+ * Normalizes origins the way hosting panels fill them: surrounding quotes, a list of
+ * domains (the first one wins), or a bare `bomber.example.com` for `https://…`.
+ */
+const withScheme = (value: unknown) => {
+  if (typeof value !== 'string') return value;
+  const first = value
+    .split(',')[0]!
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .trim();
+  if (!first) return undefined;
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(first) ? first : `https://${first}`;
+};
 
 const boolean = z
   .enum(['true', 'false', '1', '0'])
@@ -81,10 +90,22 @@ export interface Config {
   registrationsPerHour: number;
 }
 
+/** Settings that hold no secret, echoed back in configuration errors. */
+const PUBLIC_VARIABLES = new Set(['PUBLIC_ORIGIN', 'EXTRA_ORIGINS', 'RUNNER_URL', 'TRUST_PROXY']);
+
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
   const parsed = envSchema.safeParse(source);
-  if (!parsed.success) {
-    const details = parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);
+  const details = parsed.success
+    ? []
+    : parsed.error.issues.map((issue) => {
+        const name = issue.path.join('.');
+        const shown = PUBLIC_VARIABLES.has(name) ? ` (got ${JSON.stringify(source[name])})` : '';
+        return `${name}: ${issue.message}${shown}`;
+      });
+  if (source.NODE_ENV === 'production' && !withScheme(source.PUBLIC_ORIGIN ?? '')) {
+    details.push('PUBLIC_ORIGIN: Required in production, e.g. https://bomber.example.com');
+  }
+  if (!parsed.success || details.length > 0) {
     throw new Error(`Invalid configuration\n  ${details.join('\n  ')}`);
   }
   const env = parsed.data;
