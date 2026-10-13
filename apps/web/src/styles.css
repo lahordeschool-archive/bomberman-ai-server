@@ -817,6 +817,71 @@ a.match-row:hover {
   right: var(--space-2);
   background: rgb(0 0 0 / 0.55);
 }
+.arena-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  pointer-events: none;
+}
+.arena-countdown {
+  font-family: var(--mono);
+  font-size: 120px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--text);
+  text-shadow:
+    0 4px 0 #000000,
+    0 0 24px rgb(0 0 0 / 0.8);
+  animation: countdown 1s ease-out both;
+}
+@keyframes countdown {
+  from {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+  30% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+}
+.match-end {
+  pointer-events: auto;
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+  max-width: 360px;
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-2xl);
+  background: rgb(10 10 10 / 0.85);
+  text-align: center;
+  animation: rise 300ms ease-out both;
+}
+.match-end p {
+  margin: 0;
+}
+.match-end-title {
+  font-size: 32px;
+  line-height: 36px;
+  font-weight: 700;
+}
+.match-end-winner {
+  font-size: 18px;
+  color: var(--accent-strong);
+}
+.match-end-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
 .scoreboard {
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--surface-3);

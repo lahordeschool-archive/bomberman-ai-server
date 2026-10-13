@@ -110,6 +110,7 @@ export class Arena {
         ...participant.info,
         slot,
       })),
+      maxTicks: state.settings.maxTicks,
       snapshot: toSnapshot(state, []),
     };
     const abort = new AbortController();

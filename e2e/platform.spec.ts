@@ -60,6 +60,9 @@ test('register, write a bot, test it, play ranked, watch the replay, and reach t
 
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Ranked match');
   await expect(page.getByText('Replay verified')).toBeVisible({ timeout: 30_000 });
+  // A match opened while live ends with a countdown back to the list.
+  const stay = page.getByRole('button', { name: 'Stay and see the result' });
+  if (await stay.isVisible()) await stay.click();
   await expect(page.locator('.table')).toContainText(botName);
 
   await page.getByRole('link', { name: 'Leaderboard' }).first().click();

@@ -1,4 +1,4 @@
-import { type Snapshot, TICK_MS } from '@bomberman/game-engine';
+import { type MatchResult, type Snapshot, TICK_MS } from '@bomberman/game-engine';
 import type { MatchInit, MatchSummary } from '@bomberman/protocol';
 import {
   Pause,
@@ -18,6 +18,7 @@ import {
   Skeleton,
 } from '../components/ui.tsx';
 import { ArenaCanvas } from '../game/ArenaCanvas.tsx';
+import { MatchEndOverlay } from '../game/MatchEndOverlay.tsx';
 import type { ArenaRenderer } from '../game/renderer.ts';
 import {
   entriesFromSummary,
@@ -27,7 +28,7 @@ import {
 } from '../game/Scoreboard.tsx';
 import { buildTimeline, type ReplayTimeline } from '../game/timeline.ts';
 import { api, RequestError } from '../lib/api.ts';
-import { Link } from '../lib/router.tsx';
+import { Link, useRouter } from '../lib/router.tsx';
 import { useSession } from '../lib/session.tsx';
 import { emitWithAck, getSocket } from '../lib/socket.ts';
 
@@ -37,13 +38,16 @@ function ReplayPlayer({
   timeline,
   renderer,
   onSnapshot,
+  startAtEnd,
 }: {
   timeline: ReplayTimeline;
   renderer: ArenaRenderer | null;
   onSnapshot: (snapshot: Snapshot) => void;
+  /** Opens on the final frame, paused: the viewer just watched the match live. */
+  startAtEnd: boolean;
 }) {
   const [index, setIndex] = useState(0);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(!startAtEnd);
   const [speed, setSpeed] = useState(1);
   const indexRef = useRef(0);
   const last = timeline.snapshots.length - 1;
@@ -61,7 +65,12 @@ function ReplayPlayer({
     [last, renderer, timeline, onSnapshot],
   );
 
-  useEffect(() => show(0, true), [show]);
+  useEffect(() => {
+    show(startAtEnd ? last : 0, true);
+    if (startAtEnd) renderer?.halt();
+    // Only when the replay or the canvas changes, not when playback is toggled.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show]);
 
   useEffect(() => {
     if (!playing) renderer?.halt();
@@ -133,7 +142,10 @@ export default function MatchPage({ matchId }: { matchId: string }) {
   const [renderer, setRenderer] = useState<ArenaRenderer | null>(null);
   const [muted, setMuted] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [liveResult, setLiveResult] = useState<MatchResult | null>(null);
   const { user } = useSession();
+  const { navigate } = useRouter();
+  const backToMatches = useCallback(() => navigate('/matches'), [navigate]);
   const rendererRef = useRef(renderer);
   rendererRef.current = renderer;
 
@@ -158,9 +170,11 @@ export default function MatchPage({ matchId }: { matchId: string }) {
       if (id !== matchId) return;
       rendererRef.current?.push(next);
       setSnapshot(next);
+      if (next.result) setLiveResult(next.result);
     };
-    const onEnd = ({ matchId: id }: { matchId: string }) => {
+    const onEnd = ({ matchId: id, result }: { matchId: string; result: MatchResult }) => {
       if (id !== matchId) return;
+      setLiveResult(result);
       api.match(matchId).then(
         (match) => {
           setSummary(match);
@@ -273,9 +287,22 @@ export default function MatchPage({ matchId }: { matchId: string }) {
             >
               {muted ? <SpeakerSlash /> : <SpeakerHigh />}
             </button>
+            {liveInit ? (
+              <MatchEndOverlay
+                remainingTicks={isLive && snapshot ? liveInit.maxTicks - snapshot.tick : null}
+                result={liveResult}
+                names={Object.fromEntries(entries.map((entry) => [entry.slot, entry.name]))}
+                onLeave={backToMatches}
+              />
+            ) : null}
           </div>
           {timeline ? (
-            <ReplayPlayer timeline={timeline} renderer={renderer} onSnapshot={setSnapshot} />
+            <ReplayPlayer
+              timeline={timeline}
+              renderer={renderer}
+              onSnapshot={setSnapshot}
+              startAtEnd={liveInit !== null}
+            />
           ) : summary?.status === 'completed' && !error ? (
             <Skeleton lines={1} height={40} />
           ) : null}
@@ -284,7 +311,12 @@ export default function MatchPage({ matchId }: { matchId: string }) {
           ) : null}
         </div>
         <div className="stack">
-          <Scoreboard snapshot={snapshot} entries={entries} mode={isLive ? 'live' : 'replay'} />
+          <Scoreboard
+            snapshot={snapshot}
+            entries={entries}
+            maxTicks={isLive ? liveInit?.maxTicks : undefined}
+            mode={isLive ? 'live' : 'replay'}
+          />
           {summary && summary.status === 'completed' ? (
             <Card>
               <h2>Result</h2>

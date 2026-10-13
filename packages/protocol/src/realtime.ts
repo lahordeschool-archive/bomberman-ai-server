@@ -41,6 +41,8 @@ export interface MatchInit {
   matchId: string;
   kind: 'ranked' | 'casual';
   participants: MatchParticipantInfo[];
+  /** The match ends on a timeout when the snapshot tick reaches this. */
+  maxTicks: number;
   snapshot: Snapshot;
 }
 

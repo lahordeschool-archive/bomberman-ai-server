@@ -445,4 +445,43 @@ test.describe('ranked', () => {
     await expect(page.getByText('House bot')).toBeVisible();
     expect(botId).toBeTruthy();
   });
+
+  test('watching a match live ends with a countdown, the outcome, and a return to the list', async ({
+    page,
+  }) => {
+    await register(page);
+    await createBot(page, 'Live Bot');
+    await setSource(page, WALKER);
+    await saveVersion(page, 'Live v1');
+    await expect(page.getByText(/as version 1/)).toBeVisible();
+    await page.getByRole('tab', { name: 'Ranked' }).click();
+    await page.getByRole('button', { name: 'Queue for ranked' }).click();
+
+    const live = page.locator('.card', { has: page.getByRole('heading', { name: 'Live now' }) });
+    await expect(async () => {
+      await page.goto('/matches');
+      await expect(live.locator('.match-row', { hasText: 'Live Bot' })).toBeVisible({
+        timeout: 1000,
+      });
+    }).toPass({ timeout: 45_000 });
+    await live.locator('.match-row', { hasText: 'Live Bot' }).click();
+    await expect(page.locator('.badge-live')).toBeVisible();
+    // The countdown lasts a fraction of a second at test speed: record it as it appears.
+    await page.evaluate(`
+      new MutationObserver(() => {
+        if (document.querySelector('.arena-countdown')) document.body.dataset.sawCountdown = 'true';
+      }).observe(document.body, { childList: true, subtree: true });
+    `);
+
+    const outcome = page.locator('.match-end');
+    await expect(outcome).toBeVisible({ timeout: 30_000 });
+    await expect(outcome).toContainText(/wins|Draw/);
+    if ((await outcome.innerText()).includes("Time's up")) {
+      await expect(page.locator('body')).toHaveAttribute('data-saw-countdown', 'true');
+    }
+    await expect(outcome).toContainText('Back to the matches in');
+
+    await expect(page).toHaveURL(/\/matches$/, { timeout: 8000 });
+    await expect(page.getByRole('heading', { level: 1, name: 'Matches' })).toBeVisible();
+  });
 });

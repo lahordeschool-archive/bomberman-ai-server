@@ -41,7 +41,7 @@ export default defineConfig({
         PUBLIC_ORIGIN: ORIGIN,
         RUNNER_URL: `http://127.0.0.1:${RUNNER_PORT}`,
         RUNNER_TOKEN: TOKEN,
-        MATCH_TICK_MS: '5',
+        MATCH_TICK_MS: '15',
         RANKED_MAX_TICKS: '400',
         MATCHMAKER_INTERVAL_MS: '500',
         REGISTRATIONS_PER_HOUR: '1000',
