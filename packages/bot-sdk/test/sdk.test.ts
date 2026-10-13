@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createGame, hashState, runReplay, step } from '@bomberman/game-engine';
+import { createGame, hashState, runReplay, step, turnTicks } from '@bomberman/game-engine';
 import {
   botSeed,
   buildObservation,
   getSampleBot,
+  type Observation,
   parseAction,
   randomSampleBots,
   runMatch,
@@ -138,6 +139,30 @@ describe('sample bots and match loop', () => {
       intents,
     });
     expect(hashState(replayed)).toBe(hashState(state));
+  });
+
+  it('gives each player turns at its own speed, with the matching interval', async () => {
+    const state = createGame({ seed: 5, playerCount: 3, settings: { maxTicks: 120 } });
+    state.players[0]!.speed = 0;
+    state.players[2]!.speed = 3;
+    const seen = new Map<number, number[]>();
+    const recorder = (id: number) => ({
+      async decide(observation: Observation) {
+        expect(observation.decisionIntervalTicks).toBe(turnTicks(state.players[id]!.speed));
+        seen.set(id, [...(seen.get(id) ?? []), observation.tick]);
+        return 'NOTHING';
+      },
+    });
+    await runMatch({
+      state,
+      controllers: [recorder(0), recorder(1), recorder(2)],
+      tickMs: 0,
+      decisionTimeoutMs: 1000,
+    });
+    expect(seen.get(0)).toHaveLength(Math.ceil(120 / turnTicks(0)));
+    expect(seen.get(1)).toHaveLength(Math.ceil(120 / turnTicks(1)));
+    expect(seen.get(2)).toHaveLength(Math.ceil(120 / turnTicks(3)));
+    expect(seen.get(2)!.slice(0, 3)).toEqual([0, 3, 6]);
   });
 
   it('the cautious bomber survives its own bombs and usually beats random walkers', async () => {

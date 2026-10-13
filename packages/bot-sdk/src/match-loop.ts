@@ -7,16 +7,22 @@ import {
   type RecordedIntent,
   step,
   TICK_MS,
+  turnTicks,
 } from '@bomberman/game-engine';
 import { parseAction } from './actions.ts';
 import { buildObservation, type Observation } from './observation.ts';
 
 /**
- * Time a bot has to answer an observation in a real-time match: the decision
- * interval (250 ms) minus a small margin. Later answers are dropped and the player
- * skips that turn; the game never waits for a bot.
+ * Time a bot has to answer an observation in a real-time match at the starting
+ * speed: the turn interval (250 ms) minus a small margin. Later answers are dropped
+ * and the player skips that turn; the game never waits for a bot.
  */
 export const DECISION_BUDGET_MS = OBSERVATION_INTERVAL_TICKS * TICK_MS - 10;
+
+/** Answer budget for a turn of `ticks` ticks: shorter turns leave less time. */
+export function turnBudgetMs(ticks: number, tickMs: number = TICK_MS): number {
+  return Math.max(10, ticks * tickMs - 10);
+}
 
 export interface BotController {
   /** Returns the raw action (string or object) for this observation. */
@@ -34,7 +40,10 @@ export interface RunMatchOptions {
    * tick waits for the bots' answers (offline simulations and tests).
    */
   tickMs: number;
-  /** Decisions arriving later than this are dropped (the player skips the turn). */
+  /**
+   * Decisions arriving later than this are dropped (the player skips the turn). In
+   * real time, faster players get less: the budget never exceeds their turn.
+   */
   decisionTimeoutMs: number;
   signal?: AbortSignal;
   onTick?(state: GameState, events: GameEvent[]): void;
@@ -68,8 +77,8 @@ interface PendingDecision {
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
- * Drives a match: every decision interval it asks each living bot for an action and
- * steps the simulation. Accepted intents are recorded with the tick they were
+ * Drives a match: on each player's turn (every `turnTicks(speed)` ticks) it asks
+ * that bot for an action, and steps the simulation. Accepted intents are recorded with the tick they were
  * applied at, so the returned log replays to the exact same final state with
  * `runReplay`.
  */
@@ -79,18 +88,22 @@ export async function runMatch(options: RunMatchOptions): Promise<RunMatchOutcom
   let pending: PendingDecision[] = [];
   let deadline = performance.now();
 
-  const request = (playerId: number, controller: BotController): PendingDecision => {
+  const request = (
+    playerId: number,
+    controller: BotController,
+    budgetMs: number,
+  ): PendingDecision => {
     const abort = new AbortController();
     const entry: PendingDecision = {
       playerId,
-      deadline: performance.now() + decisionTimeoutMs,
+      deadline: performance.now() + budgetMs,
       abort,
       done: false,
       decision: null,
       settled: Promise.resolve(),
     };
     entry.settled = controller
-      .decide(buildObservation(state, playerId), abort.signal, decisionTimeoutMs)
+      .decide(buildObservation(state, playerId), abort.signal, budgetMs)
       .then(
         (raw) => {
           if (abort.signal.aborted) return;
@@ -140,24 +153,38 @@ export async function runMatch(options: RunMatchOptions): Promise<RunMatchOutcom
 
   const onAbort = () => pending.forEach((entry) => entry.abort.abort());
   signal?.addEventListener('abort', onAbort, { once: true });
+  /** Tick of each player's next turn; the interval follows their current speed. */
+  const nextTurn = state.players.map(() => 0);
   try {
     while (state.status === 'running') {
       signal?.throwIfAborted();
-      if (state.tick % OBSERVATION_INTERVAL_TICKS === 0) {
-        if (pending.length > 0) {
-          await settle(pending);
+      const due = state.players.filter(
+        (player) => player.alive && controllers[player.id] && state.tick >= nextTurn[player.id]!,
+      );
+      if (due.length > 0) {
+        const dueIds = new Set(due.map((player) => player.id));
+        const previous = pending.filter((entry) => dueIds.has(entry.playerId));
+        if (previous.length > 0) {
+          await settle(previous);
           signal?.throwIfAborted();
-          for (const entry of pending) if (entry.done) apply(entry);
+          for (const entry of previous) if (entry.done) apply(entry);
+          pending = pending.filter((entry) => !dueIds.has(entry.playerId));
         }
-        pending = state.players.flatMap((player) => {
-          const controller = controllers[player.id];
-          return controller && player.alive ? [request(player.id, controller)] : [];
+        const fresh = due.map((player) => {
+          const ticks = turnTicks(player.speed, state.engineVersion);
+          nextTurn[player.id] = state.tick + ticks;
+          const budgetMs =
+            tickMs > 0
+              ? Math.min(decisionTimeoutMs, turnBudgetMs(ticks, tickMs))
+              : decisionTimeoutMs;
+          return request(player.id, controllers[player.id]!, budgetMs);
         });
         if (tickMs <= 0) {
-          await settle(pending);
+          await settle(fresh);
           signal?.throwIfAborted();
-          for (const entry of pending) if (entry.done) apply(entry);
-          pending = [];
+          for (const entry of fresh) if (entry.done) apply(entry);
+        } else {
+          pending.push(...fresh);
         }
       }
       if (tickMs > 0) {

@@ -319,6 +319,26 @@ test.describe('bots', () => {
   });
 });
 
+test.describe('browsers without Web Workers', () => {
+  test('local tests fall back to QuickJS, with the ranked CPU budget', async ({ page }) => {
+    await page.route('**/bot-worker-*.js', (route) => route.abort());
+    await register(page);
+    await createBot(page, 'Fallback Bot');
+
+    await setSource(page, WALKER);
+    await page.getByRole('button', { name: 'Run test' }).click();
+    await expect(page.locator('.console-lines')).toContainText('walker ready');
+    await expect(page.locator('.scoreboard')).toContainText('Fallback Bot');
+    await expect(page.locator('.scoreboard-header')).not.toContainText('0:00');
+    await page.getByRole('button', { name: 'Stop' }).click();
+
+    await setSource(page, 'function gameLoop(obs) { while (true) {} }');
+    await page.getByRole('button', { name: 'Run test' }).click();
+    await expect(page.locator('.console-lines')).toContainText('Exceeded the 100 ms CPU budget');
+    await page.getByRole('button', { name: 'Stop' }).click();
+  });
+});
+
 test.describe('casual rooms', () => {
   test('two players and a house bot play a room match and open its replay', async ({
     page,

@@ -7,9 +7,13 @@ import {
   createGame,
   FLAME_TICKS,
   MAX_FLAME_RANGE,
+  maxSpeed,
   moveDurationTicks,
+  OBSERVATION_INTERVAL_TICKS,
   step,
+  TURN_TICKS_BY_SPEED,
   toSnapshot,
+  turnTicks,
 } from '../src/index.ts';
 import { emptyArena, setCell, stepN } from './helpers.ts';
 
@@ -63,10 +67,32 @@ describe('movement', () => {
     expect(state.players[0]!.move).toBeNull();
   });
 
-  it('faster players need fewer ticks per tile', () => {
-    expect(moveDurationTicks(0)).toBe(6);
-    expect(moveDurationTicks(6)).toBeLessThan(moveDurationTicks(1));
-    expect(moveDurationTicks(100)).toBe(2);
+  it('speed sets the turn interval, and a move ends one tick before the next turn', () => {
+    expect([0, 1, 2, 3].map((speed) => turnTicks(speed))).toEqual([...TURN_TICKS_BY_SPEED]);
+    expect(turnTicks(1)).toBe(OBSERVATION_INTERVAL_TICKS);
+    expect(turnTicks(100)).toBe(3);
+    for (let speed = 0; speed <= maxSpeed(); speed++) {
+      expect(moveDurationTicks(speed)).toBe(turnTicks(speed) - 1);
+    }
+  });
+
+  it('keeps the engine v1 timings for old replays', () => {
+    expect([0, 1, 2, 3, 4, 5, 6].map((speed) => moveDurationTicks(speed, 1))).toEqual([
+      6, 6, 5, 5, 4, 4, 4,
+    ]);
+    expect(turnTicks(6, 1)).toBe(OBSERVATION_INTERVAL_TICKS);
+    expect(maxSpeed(1)).toBe(6);
+  });
+
+  it('a bot answering one tick late is still standing on its new tile at its next turn', () => {
+    const state = emptyArena();
+    const ticks = turnTicks(state.players[0]!.speed);
+    for (let turn = 0; turn < 3; turn++) {
+      step(state);
+      applyIntent(state, 0, { type: 'move', direction: 'right' });
+      stepN(state, ticks - 1, step);
+      expect(state.players[0]!).toMatchObject({ x: 2 + turn, move: null });
+    }
   });
 });
 
@@ -164,6 +190,20 @@ describe('items', () => {
     expect(player.flameRange).toBe(MAX_FLAME_RANGE);
     expect(player.speed).toBe(0);
     expect(player.collected).toEqual(['extraBomb', 'maxFlame', 'speedDown']);
+    expect(turnTicks(player.speed)).toBeGreaterThan(OBSERVATION_INTERVAL_TICKS);
+  });
+
+  it('caps roller skates at the fastest turn interval', () => {
+    const state = emptyArena();
+    for (let x = 2; x <= 6; x++) state.items.push({ x, y: 1, type: 'speedUp', hidden: false });
+    for (let index = 0; index < 5; index++) {
+      applyIntent(state, 0, { type: 'move', direction: 'right' });
+      stepN(state, 8, step);
+    }
+    const player = state.players[0]!;
+    expect(player.x).toBe(6);
+    expect(player.speed).toBe(maxSpeed());
+    expect(player.stats.itemsCollected).toBe(5);
   });
 
   it('scatters a dead player collected items on free cells', () => {

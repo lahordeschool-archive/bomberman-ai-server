@@ -13,8 +13,10 @@ import type { WorkerInbound, WorkerOutbound } from './bot-worker.ts';
 export const SLOW_DECISION_MS = 25;
 /** A worker whose synchronous code runs this long is terminated until restarted. */
 const HARD_LIMIT_MS = 1500;
-/** Loading includes fetching and compiling the sandbox, which is slow on a cold cache. */
-const LOAD_TIMEOUT_MS = 10_000;
+/** A worker that has not run its script by then is considered blocked by the browser. */
+const WORKER_START_MS = 3000;
+/** Time the bot's own top-level code gets once the worker runs. */
+const LOAD_TIMEOUT_MS = 3000;
 /** Late-turn warnings are throttled so a slow bot does not flood the console. */
 const LATE_WARNING_INTERVAL_MS = 3000;
 
@@ -36,6 +38,14 @@ async function reloadIfRebuilt(): Promise<void> {
     () => null,
   );
   if (response?.status === 404) reloadForStaleChunk();
+}
+
+/** The browser never ran the worker script (blocked, paused by a debugger, or deleted). */
+export class WorkerStartError extends Error {
+  constructor() {
+    super('Web Workers did not start in this browser');
+    this.name = 'WorkerStartError';
+  }
 }
 
 interface PendingCall {
@@ -72,28 +82,39 @@ export class WorkerBot implements BotController {
       type: 'module',
     });
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+      let started = false;
+      const fail = (error: Error) => {
+        clearTimeout(timer);
         worker.terminate();
+        reject(error);
+      };
+      let timer = setTimeout(() => {
         void reloadIfRebuilt();
-        reject(new Error('Your bot took too long to load'));
-      }, LOAD_TIMEOUT_MS);
+        fail(new WorkerStartError());
+      }, WORKER_START_MS);
       const onMessage = (event: MessageEvent<WorkerOutbound>) => {
-        if (event.data.type === 'loaded' || event.data.type === 'loadError') {
+        const message = event.data;
+        if (message.type === 'ready') {
+          started = true;
+          clearTimeout(timer);
+          timer = setTimeout(
+            () => fail(new Error(`Your bot took more than ${LOAD_TIMEOUT_MS} ms to load`)),
+            LOAD_TIMEOUT_MS,
+          );
+        } else if (message.type === 'loaded') {
           clearTimeout(timer);
           worker.removeEventListener('message', onMessage);
-          if (event.data.type === 'loaded') resolve(new WorkerBot(worker, events));
-          else {
-            worker.terminate();
-            reject(new Error(event.data.error));
-          }
+          resolve(new WorkerBot(worker, events));
+        } else if (message.type === 'loadError') {
+          fail(new Error(message.error));
         }
       };
       worker.addEventListener('message', onMessage);
       worker.addEventListener('error', (event) => {
-        clearTimeout(timer);
-        worker.terminate();
-        void reloadIfRebuilt();
-        reject(new Error(event.message || 'Your bot failed to load'));
+        if (!started) void reloadIfRebuilt();
+        fail(
+          started ? new Error(event.message || 'Your bot failed to load') : new WorkerStartError(),
+        );
       });
       worker.postMessage({ type: 'load', source, seed } satisfies WorkerInbound);
     });

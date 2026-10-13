@@ -145,8 +145,8 @@ export default function BotEditorPage({ botId }: { botId: string }) {
         log(
           'warn',
           ms === null
-            ? `No decision before the next turn: turns are being skipped. Answer within ${DECISION_BUDGET_MS} ms, and keep slow requests in the background.`
-            : `Decision took ${Math.round(ms)} ms, over the ${DECISION_BUDGET_MS} ms budget: that turn was skipped.`,
+            ? `No decision before the next turn: turns are being skipped. Answer within ${DECISION_BUDGET_MS} ms (less once you pick up roller skates), and keep slow requests in the background.`
+            : `Decision took ${Math.round(ms)} ms, longer than your turn: that turn was skipped.`,
           tick,
         ),
     }),
@@ -155,6 +155,40 @@ export default function BotEditorPage({ botId }: { botId: string }) {
 
   const local = useLocalMatch(renderer);
   const casual = useCasualRoom(renderer, () => sourceRef.current, botEvents);
+
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const editorReady = source !== null;
+  useEffect(() => {
+    const layout = layoutRef.current;
+    if (!layout || !editorReady) return;
+    /** Side by side, the editor ends level with the bottom of the scoreboard. */
+    const fit = () => {
+      const editor = layout.querySelector<HTMLElement>('.code-editor');
+      const scoreboard = layout.querySelector<HTMLElement>('.arena-column .scoreboard');
+      const sideBySide = getComputedStyle(layout).gridTemplateColumns.split(' ').length > 1;
+      if (!editor || !scoreboard || !sideBySide) {
+        layout.style.removeProperty('--editor-height');
+        return;
+      }
+      const height = scoreboard.getBoundingClientRect().bottom - editor.getBoundingClientRect().top;
+      layout.style.setProperty('--editor-height', `${Math.max(320, Math.round(height))}px`);
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(layout);
+    for (const column of layout.children) observer.observe(column);
+    const frame = requestAnimationFrame(fit);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [editorReady, expanded]);
+
+  useEffect(() => {
+    if (local.error) log('error', local.error);
+  }, [local.error, log]);
+  useEffect(() => {
+    if (casual.error) log('error', casual.error);
+  }, [casual.error, log]);
 
   const refresh = useCallback(async () => {
     const detail = await api.bot(botId);
@@ -304,7 +338,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
     try {
       cache = await fetchSaved(lineup);
     } catch (failure) {
-      setActionError((failure as Error).message);
+      log('error', `Could not load a saved opponent: ${(failure as Error).message}`);
       return;
     }
     const players = buildParticipants(lineup, cache);
@@ -496,7 +530,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
         </div>
       </header>
 
-      <div className="editor-layout">
+      <div className="editor-layout" ref={layoutRef}>
         <div className="editor-column">
           <div className="editor-toolbar">
             <Button
@@ -581,7 +615,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
               <CodeEditor value={source} onChange={setSource} label="Bot source code" />
             </Suspense>
           )}
-          <ErrorMessage>{actionError ?? local.error ?? casual.error}</ErrorMessage>
+          <ErrorMessage>{actionError}</ErrorMessage>
           {notice ? (
             <p className="notice" role="status">
               {notice}
@@ -773,8 +807,8 @@ export default function BotEditorPage({ botId }: { botId: string }) {
             <Card className="panel">
               <p className="muted">
                 Ranked matches run your active version in an isolated sandbox on the server. Each
-                turn gets 100 ms of CPU and must answer within {DECISION_BUDGET_MS} ms, or it is
-                skipped. Only these matches change your rating.
+                turn gets 100 ms of CPU and must answer within {DECISION_BUDGET_MS} ms (less for a
+                player sped up by roller skates), or it is skipped. Only these matches change your rating.
               </p>
               <div className="toolbar">
                 <Button

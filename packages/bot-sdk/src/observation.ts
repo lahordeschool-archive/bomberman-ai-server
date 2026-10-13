@@ -3,8 +3,8 @@ import {
   type GameState,
   type ItemType,
   moveDurationTicks,
-  OBSERVATION_INTERVAL_TICKS,
   TICK_MS,
+  turnTicks,
 } from '@bomberman/game-engine';
 
 export const SDK_VERSION = 1;
@@ -29,7 +29,7 @@ export interface Observation {
   sdkVersion: number;
   tick: number;
   tickMs: number;
-  /** Ticks between two calls to `gameLoop`. */
+  /** Ticks until this bot's next call to `gameLoop`; shorter as `me.speed` grows. */
   decisionIntervalTicks: number;
   maxTicks: number;
   width: number;
@@ -62,14 +62,14 @@ export function buildObservation(state: GameState, playerId: number): Observatio
       bombsAvailable: Math.max(0, player.bombCapacity - active),
       flameRange: player.flameRange,
       speed: player.speed,
-      ticksPerTile: moveDurationTicks(player.speed),
+      ticksPerTile: moveDurationTicks(player.speed, state.engineVersion),
     };
   });
   return {
     sdkVersion: SDK_VERSION,
     tick: state.tick,
     tickMs: TICK_MS,
-    decisionIntervalTicks: OBSERVATION_INTERVAL_TICKS,
+    decisionIntervalTicks: turnTicks(state.players[playerId]!.speed, state.engineVersion),
     maxTicks: state.settings.maxTicks,
     width: state.width,
     height: state.height,

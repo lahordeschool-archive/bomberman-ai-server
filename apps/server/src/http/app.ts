@@ -42,7 +42,8 @@ export async function buildApp(
       useDefaults: false,
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
+        // WebAssembly only (the QuickJS fallback sandbox); JavaScript eval stays blocked.
+        scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
         workerSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'blob:'],

@@ -1,4 +1,4 @@
-import { ENGINE_VERSION } from './constants.ts';
+import { ENGINE_VERSION, SUPPORTED_ENGINE_VERSIONS } from './constants.ts';
 import { applyIntent, createGame, step } from './engine.ts';
 import type { GameState, MatchSettings, RecordedIntent } from './types.ts';
 
@@ -15,7 +15,7 @@ export interface ReplayData {
  * `t` are applied, in recorded order, right before step `t`, exactly like the live loop.
  */
 export function runReplay(data: ReplayData, onTick?: (state: GameState) => void): GameState {
-  if (data.engineVersion !== ENGINE_VERSION) {
+  if (!SUPPORTED_ENGINE_VERSIONS.includes(data.engineVersion)) {
     throw new Error(
       `Replay was recorded with engine v${data.engineVersion}, this build runs v${ENGINE_VERSION}`,
     );
@@ -24,6 +24,7 @@ export function runReplay(data: ReplayData, onTick?: (state: GameState) => void)
     seed: data.seed,
     playerCount: data.playerCount,
     settings: data.settings,
+    engineVersion: data.engineVersion,
   });
   let cursor = 0;
   const intents = [...data.intents].sort((a, b) => a.tick - b.tick);

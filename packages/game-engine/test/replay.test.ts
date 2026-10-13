@@ -19,8 +19,14 @@ const intentArbitrary: fc.Arbitrary<Intent> = fc.oneof(
   fc.constant<Intent>({ type: 'idle' }),
 );
 
-function simulateLive(seed: number, playerCount: number, decisions: Intent[][], maxTicks: number) {
-  const state = createGame({ seed, playerCount, settings: { maxTicks } });
+function simulateLive(
+  seed: number,
+  playerCount: number,
+  decisions: Intent[][],
+  maxTicks: number,
+  engineVersion = ENGINE_VERSION,
+) {
+  const state = createGame({ seed, playerCount, settings: { maxTicks }, engineVersion });
   const log: RecordedIntent[] = [];
   let decision = 0;
   while (state.status === 'running') {
@@ -86,6 +92,25 @@ describe('deterministic replay', () => {
       intents: tampered,
     });
     expect(hashState(replayed)).not.toBe(hashState(state));
+  });
+
+  it('still re-simulates matches recorded with engine v1 under v1 rules', () => {
+    const decisions: Intent[][] = [
+      [{ type: 'move', direction: 'right' }, { type: 'move', direction: 'left' }],
+      [{ type: 'move', direction: 'right' }, { type: 'bomb' }],
+      [{ type: 'bomb' }, { type: 'move', direction: 'down' }],
+    ];
+    const live = simulateLive(11, 2, decisions, 400, 1);
+    const replay = {
+      engineVersion: 1,
+      seed: 11,
+      playerCount: 2,
+      settings: live.state.settings,
+      intents: live.log,
+    };
+    const replayed = runReplay(replay);
+    expect(replayed.engineVersion).toBe(1);
+    expect(hashState(replayed)).toBe(hashState(live.state));
   });
 
   it('rejects replays recorded by another engine version', () => {

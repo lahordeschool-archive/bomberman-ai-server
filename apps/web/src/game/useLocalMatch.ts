@@ -1,7 +1,8 @@
 import { botSeed, DECISION_BUDGET_MS, runMatch } from '@bomberman/bot-sdk';
 import { createGame, randomSeed, type Snapshot, TICK_MS, toSnapshot } from '@bomberman/game-engine';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { WorkerBot, type WorkerBotEvents } from '../bots/worker-bot.ts';
+import { type BrowserBot, createBrowserBot } from '../bots/browser-bot.ts';
+import type { WorkerBotEvents } from '../bots/worker-bot.ts';
 import type { ArenaRenderer } from './renderer.ts';
 
 export interface LocalParticipant {
@@ -41,10 +42,10 @@ export function useLocalMatch(renderer: ArenaRenderer | null) {
       setStatus('loading');
       setError(null);
       const seed = options.seed ?? randomSeed();
-      let bots: WorkerBot[] = [];
+      let bots: BrowserBot[] = [];
       try {
         const loads = participants.map((participant, index) =>
-          WorkerBot.create(participant.source, botSeed(seed, index), participant.events).catch(
+          createBrowserBot(participant.source, botSeed(seed, index), participant.events).catch(
             (loadError: Error) => {
               throw new Error(`${participant.name}: ${loadError.message}`);
             },

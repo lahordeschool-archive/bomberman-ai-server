@@ -25,10 +25,14 @@ version, change ratings.
 
 - The engine (`packages/game-engine`) is pure: the state carries its own Mulberry32
   RNG, time is a tick counter (50 ms), and `step()` has a fixed phase order.
-- Bots are asked for a decision every 5 ticks (250 ms). In real-time matches the loop
-  (`runMatch`) never waits: it sends the observations, keeps ticking, and applies each
-  answer on the tick it arrives. Answers still missing at the next decision tick
-  (after `DECISION_BUDGET_MS`, 240 ms) are dropped and that player skips the turn.
+- Each bot is asked for a decision once per turn; the turn length follows the
+  player's speed (`turnTicks`: 8, 5, 4 or 3 ticks, 5 at the start). In real-time
+  matches the loop (`runMatch`) never waits: it sends the observations, keeps ticking,
+  and applies each answer on the tick it arrives. Answers still missing at that
+  player's next turn (after `turnBudgetMs`, at most `DECISION_BUDGET_MS` = 240 ms) are
+  dropped and that player skips the turn.
+- Engine v2 introduced per-player turns. `createGame` still accepts
+  `engineVersion: 1`, so matches recorded before keep replaying under their rules.
   With `tickMs: 0` (offline simulation, tests) the loop runs in lockstep instead.
 - Accepted intents are recorded as `(tick, slot, intent)` with the tick they were
   applied at, and stored in `match_events`.

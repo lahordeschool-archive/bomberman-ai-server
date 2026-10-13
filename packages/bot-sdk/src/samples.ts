@@ -6,7 +6,9 @@ export interface SampleBot {
 }
 
 export const STARTER_SOURCE = `/**
- * Your bot. gameLoop is called every 250 ms (every 5 game ticks) with an observation:
+ * Your bot. gameLoop is called once per turn with an observation. A turn lasts
+ * 250 ms (5 game ticks), 200 or 150 ms with roller skates (speedUp), 400 ms after a
+ * speedDown; each turn is one decision and at most one tile.
  *
  *   obs.grid[y][x]   0 floor, 1 indestructible wall, 2 destructible wall
  *   obs.me           { id, x, y, alive, bombsAvailable, flameRange, speed, moving, ... }
@@ -17,7 +19,7 @@ export const STARTER_SOURCE = `/**
  *
  * Return "MOVE UP" | "MOVE DOWN" | "MOVE LEFT" | "MOVE RIGHT" | "PLANT BOMB" | "NOTHING".
  * Globals persist between calls, console.log output shows up in the editor console.
- * Answer within 240 ms or the turn is skipped; the game never waits. gameLoop may be
+ * Answer before the turn ends or it is skipped; the game never waits. gameLoop may be
  * async and use fetch() to call public HTTP APIs (see the bot SDK docs).
  */
 

@@ -1,4 +1,10 @@
-export const ENGINE_VERSION = 1;
+/**
+ * v1: every bot plays every 5 ticks and speed only shortens moves.
+ * v2: speed sets each player's own turn interval (`TURN_TICKS_BY_SPEED`).
+ */
+export const ENGINE_VERSION = 2;
+/** Versions `runReplay` can still re-simulate. */
+export const SUPPORTED_ENGINE_VERSIONS: readonly number[] = [1, 2];
 
 export const TICK_MS = 50;
 export const GRID_WIDTH = 15;
@@ -7,8 +13,13 @@ export const TILE_SIZE = 16;
 export const MAX_PLAYERS = 4;
 export const MIN_PLAYERS = 2;
 
-/** Bots receive an observation every 5 ticks (250 ms), like the legacy client. */
+/** Turn interval at the starting speed: an observation every 5 ticks (250 ms). */
 export const OBSERVATION_INTERVAL_TICKS = 5;
+/**
+ * v2 turn interval per speed level, which is also the time to cross one tile:
+ * 400 ms slowed down, 250 ms at the start, then 200 and 150 ms with roller skates.
+ */
+export const TURN_TICKS_BY_SPEED: readonly number[] = [8, 5, 4, 3];
 export const BOMB_FUSE_TICKS = 50;
 export const FLAME_TICKS = 10;
 export const DEFAULT_MAX_TICKS = 3 * 60 * (1000 / TICK_MS);
@@ -18,6 +29,7 @@ export const ITEM_CHANCE = 0.2;
 
 export const MAX_BOMBS = 10;
 export const MAX_FLAME_RANGE = 10;
+/** Speed cap of engine v1; v2 caps at `TURN_TICKS_BY_SPEED.length - 1`. */
 export const MAX_SPEED = 6;
 export const MIN_SPEED = 0;
 

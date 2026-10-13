@@ -8,8 +8,9 @@ function gameLoop(obs) {
 }
 ```
 
-It is called every 250 ms of game time (every 5 ticks of 50 ms) with an observation
-of the arena and returns one action. Top level variables persist between calls, so
+It is called once per turn, every 250 ms of game time at the starting speed (every
+5 ticks of 50 ms; roller skates make turns come faster), with an observation of the
+arena, and returns one action. Top level variables persist between calls, so
 you can keep memory across turns.
 
 ## Actions
@@ -22,20 +23,48 @@ Return any of these (case insensitive), or the equivalent object:
 | `"PLANT BOMB"` (or `"BOMB"`)                              | `{ type: 'bomb' }`                  |
 | `"NOTHING"`, `null`, anything else                        | `{ type: 'idle' }`                  |
 
-A move takes several ticks (`obs.me.ticksPerTile`); a move requested while one is in
-progress is queued.
+A move crosses one tile in `obs.me.ticksPerTile` ticks, one tick less than your turn,
+so a bot that answers quickly is standing on its new tile when its next turn comes.
+A move requested while one is in progress is queued.
+
+## Speed and power ups
+
+Your speed sets how often you play. Each turn is one decision and at most one tile:
+
+| `speed` | How you get there        | Turn (`obs.decisionIntervalTicks`) | Answer within |
+| ------- | ------------------------ | ---------------------------------- | ------------- |
+| 0       | picked up a `speedDown`  | 8 ticks (400 ms)                   | 240 ms        |
+| 1       | starting speed           | 5 ticks (250 ms)                   | 240 ms        |
+| 2       | one `speedUp`            | 4 ticks (200 ms)                   | 190 ms        |
+| 3 (max) | two or more `speedUp`    | 3 ticks (150 ms)                   | 140 ms        |
+
+You need no code for it: `gameLoop` is just called more (or less) often. A faster
+player outruns blasts and reaches items first, and gets less time per answer.
+
+| Item        | Effect                                                             |
+| ----------- | ------------------------------------------------------------------ |
+| `extraBomb` | +1 bomb on the board at a time (max 10)                            |
+| `flameUp`   | +1 blast range (max 10)                                            |
+| `maxFlame`  | blast range jumps to 10: rare, and your bombs now cross the map    |
+| `speedUp`   | roller skates: +1 speed, up to 3                                   |
+| `speedDown` | -1 speed, down to 0: you play every 400 ms instead of 250 ms       |
+
+Every pickup scores 10 points, even when you are already at the cap. Your current
+values are in `obs.me` (`bombCapacity`, `bombsAvailable`, `flameRange`, `speed`,
+`ticksPerTile`), and the same fields describe your opponents in `obs.players`.
 
 ## Timing: the game never waits
 
-The game runs at a fixed 50 ms per tick, whatever the bots do. Every 5 ticks your
-`gameLoop` receives a fresh observation and has **240 ms** to answer:
+The game runs at a fixed 50 ms per tick, whatever the bots do. On each of your turns
+`gameLoop` receives a fresh observation and must answer before the turn ends (240 ms
+at the starting speed, see above):
 
 - Your action is applied on the tick it arrives, so a fast answer acts sooner.
 - An answer that is not ready when the next observation comes is dropped, and your
   player skips that turn (it keeps finishing its current move). A late answer is
   never applied to a later turn.
 - `gameLoop` may be `async` or return a promise. Only the wall-clock time until it
-  settles counts against the 240 ms; waiting on a request costs no CPU budget.
+  settles counts against that budget; waiting on a request costs no CPU budget.
 
 Promises you start keep running after `gameLoop` returns, so slow work belongs in
 the background: start it, return something sensible right away, and use the result
@@ -74,7 +103,9 @@ The response has `ok`, `status`, `statusText`, `url`, `redirected`, `headers.get
   link-local, and other reserved addresses, and ports below 1024 other than 80 and 443. Your requests identify themselves with the `BomberArenaBot/1.0` user agent.
 - In **Run test** and casual rooms your bot runs in your browser, so the API must
   allow cross-origin requests (CORS). Requests never carry your cookies. Ranked
-  matches are not affected by CORS.
+  matches are not affected by CORS. A few embedded browsers never start Web Workers;
+  there your bot runs in the same QuickJS sandbox as ranked play, but `fetch` is
+  unavailable. Use a regular browser to test network calls.
 - There is no secret storage. Anything in your source is stored on the server, and
   public versions can be read by anyone, so do not put API keys or passwords in a bot.
 - An API you call sees the game state you send it. Matches are recorded as replays,
@@ -87,7 +118,7 @@ interface Observation {
   sdkVersion: 1;
   tick: number; // current tick, starts at 0
   tickMs: 50;
-  decisionIntervalTicks: 5;
+  decisionIntervalTicks: number; // ticks until your next turn: 8, 5, 4 or 3 by speed
   maxTicks: number; // the match ends on timeout at this tick
   width: 15;
   height: 13;
@@ -110,13 +141,13 @@ interface Player {
   bombCapacity: number;
   bombsAvailable: number;
   flameRange: number;
-  speed: number;
+  speed: number; // 0 to 3, see "Speed and power ups"
   ticksPerTile: number;
 }
 ```
 
-Item types: `extraBomb` (+1 bomb), `flameUp` (+1 range), `maxFlame` (maximum range),
-`speedUp`, `speedDown`.
+Item types: `extraBomb`, `flameUp`, `maxFlame`, `speedUp`, `speedDown` (see
+"Speed and power ups").
 
 ## Rules worth knowing
 
@@ -135,7 +166,7 @@ Item types: `extraBomb` (+1 bomb), `flameUp` (+1 range), `maxFlame` (maximum ran
 | Limit                | Value                                                |
 | -------------------- | ---------------------------------------------------- |
 | Source size          | 64 KB                                                |
-| Time per decision    | 240 ms wall clock (later answers are dropped)        |
+| Time per decision    | 240 ms wall clock, less when fast (late = dropped)   |
 | CPU per run          | 100 ms for each stretch of synchronous code          |
 | Load time            | 1 s                                                  |
 | Memory               | 32 MB                                                |

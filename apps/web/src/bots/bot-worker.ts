@@ -16,6 +16,8 @@ export type WorkerInbound =
   | { type: 'act'; id: number; observation: unknown; now: number };
 
 export type WorkerOutbound =
+  /** The worker script runs: posted before any bot code, so a slow bot is not mistaken for a dead worker. */
+  | { type: 'ready' }
   | { type: 'loaded' }
   | { type: 'loadError'; error: string }
   /** The synchronous part of gameLoop returned: the worker is free again. */
@@ -132,6 +134,8 @@ async function browserFetch(url: string, requestJson: string): Promise<HostFetch
 
 const hostFetch = (url: string, requestJson: string): Promise<string> =>
   browserFetch(url, requestJson).then((result) => JSON.stringify(result));
+
+post({ type: 'ready' });
 
 scope.addEventListener('message', (event: MessageEvent<WorkerInbound>) => {
   const message = event.data;

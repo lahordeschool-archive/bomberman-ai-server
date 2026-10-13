@@ -14,8 +14,11 @@ import {
   MIN_PLAYERS,
   MIN_SPEED,
   SCORE_WEIGHTS,
+  OBSERVATION_INTERVAL_TICKS,
   SPAWN_POINTS,
+  SUPPORTED_ENGINE_VERSIONS,
   TICK_MS,
+  TURN_TICKS_BY_SPEED,
   type Direction,
   type ItemType,
 } from './constants.ts';
@@ -44,6 +47,8 @@ export interface CreateGameOptions {
   seed: number;
   playerCount: number;
   settings?: Partial<MatchSettings>;
+  /** Rules to simulate; only replays of older matches pass an older version. */
+  engineVersion?: number;
 }
 
 export function normalizeSettings(settings: Partial<MatchSettings> = {}): MatchSettings {
@@ -56,9 +61,17 @@ export function normalizeSettings(settings: Partial<MatchSettings> = {}): MatchS
   };
 }
 
-export function createGame({ seed, playerCount, settings }: CreateGameOptions): GameState {
+export function createGame({
+  seed,
+  playerCount,
+  settings,
+  engineVersion = ENGINE_VERSION,
+}: CreateGameOptions): GameState {
   if (!Number.isInteger(playerCount) || playerCount < MIN_PLAYERS || playerCount > MAX_PLAYERS) {
     throw new RangeError(`playerCount must be between ${MIN_PLAYERS} and ${MAX_PLAYERS}`);
+  }
+  if (!SUPPORTED_ENGINE_VERSIONS.includes(engineVersion)) {
+    throw new RangeError(`Engine v${engineVersion} is not supported by this build`);
   }
   const normalized = normalizeSettings(settings);
   const rngState = { rng: normalizeSeed(seed) };
@@ -74,7 +87,7 @@ export function createGame({ seed, playerCount, settings }: CreateGameOptions): 
       alive: true,
       bombCapacity: normalized.bombs,
       flameRange: normalized.flames,
-      speed: normalized.speed,
+      speed: Math.min(normalized.speed, maxSpeed(engineVersion)),
       move: null,
       queuedMove: null,
       queuedBomb: false,
@@ -85,7 +98,7 @@ export function createGame({ seed, playerCount, settings }: CreateGameOptions): 
     });
   }
   return {
-    engineVersion: ENGINE_VERSION,
+    engineVersion,
     seed: normalizeSeed(seed),
     rng: rngState.rng,
     tick: 0,
@@ -108,9 +121,25 @@ export function cloneState(state: GameState): GameState {
   return structuredClone(state);
 }
 
-/** Ticks needed to cross one tile; legacy duration was `300 - 20 * speed` ms. */
-export function moveDurationTicks(speed: number): number {
-  return Math.max(2, Math.round((300 - 20 * speed) / TICK_MS));
+export function maxSpeed(engineVersion: number = ENGINE_VERSION): number {
+  return engineVersion === 1 ? MAX_SPEED : TURN_TICKS_BY_SPEED.length - 1;
+}
+
+/** Ticks between two decisions of a player with this speed. */
+export function turnTicks(speed: number, engineVersion: number = ENGINE_VERSION): number {
+  if (engineVersion === 1) return OBSERVATION_INTERVAL_TICKS;
+  const level = clampInt(speed, MIN_SPEED, TURN_TICKS_BY_SPEED.length - 1);
+  return TURN_TICKS_BY_SPEED[level]!;
+}
+
+/**
+ * Ticks needed to cross one tile. Since v2 a move ends one tick before the next turn,
+ * so a bot answering within a tick stands on its new tile when asked again, and
+ * moving every turn walks at one tile per turn. v1 kept the legacy `300 - 20 * speed` ms.
+ */
+export function moveDurationTicks(speed: number, engineVersion: number = ENGINE_VERSION): number {
+  if (engineVersion === 1) return Math.max(2, Math.round((300 - 20 * speed) / TICK_MS));
+  return turnTicks(speed, engineVersion) - 1;
 }
 
 /**
@@ -221,7 +250,7 @@ function advanceMovement(state: GameState, player: PlayerState, events: GameEven
         toX,
         toY,
         elapsed: 0,
-        duration: moveDurationTicks(player.speed),
+        duration: moveDurationTicks(player.speed, state.engineVersion),
       };
     }
   }
@@ -242,7 +271,7 @@ function collectItem(state: GameState, player: PlayerState, events: GameEvent[])
   );
   if (index < 0) return;
   const [item] = state.items.splice(index, 1);
-  applyItem(player, item!.type);
+  applyItem(player, item!.type, state.engineVersion);
   player.collected.push(item!.type);
   player.stats.itemsCollected++;
   events.push({
@@ -254,7 +283,7 @@ function collectItem(state: GameState, player: PlayerState, events: GameEvent[])
   });
 }
 
-function applyItem(player: PlayerState, type: ItemType): void {
+function applyItem(player: PlayerState, type: ItemType, engineVersion: number): void {
   switch (type) {
     case 'extraBomb':
       player.bombCapacity = Math.min(MAX_BOMBS, player.bombCapacity + 1);
@@ -266,7 +295,7 @@ function applyItem(player: PlayerState, type: ItemType): void {
       player.flameRange = MAX_FLAME_RANGE;
       break;
     case 'speedUp':
-      player.speed = Math.min(MAX_SPEED, player.speed + 1);
+      player.speed = Math.min(maxSpeed(engineVersion), player.speed + 1);
       break;
     case 'speedDown':
       player.speed = Math.max(MIN_SPEED, player.speed - 1);

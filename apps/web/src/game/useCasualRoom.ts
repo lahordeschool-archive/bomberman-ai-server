@@ -2,7 +2,8 @@ import { botSeed, type Observation } from '@bomberman/bot-sdk';
 import type { Snapshot } from '@bomberman/game-engine';
 import type { CasualLobby, MatchInit } from '@bomberman/protocol';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { WorkerBot, type WorkerBotEvents } from '../bots/worker-bot.ts';
+import { type BrowserBot, createBrowserBot } from '../bots/browser-bot.ts';
+import type { WorkerBotEvents } from '../bots/worker-bot.ts';
 import { emitWithAck, getSocket } from '../lib/socket.ts';
 import type { ArenaRenderer } from './renderer.ts';
 
@@ -19,8 +20,8 @@ export function useCasualRoom(
   const [match, setMatch] = useState<{ init: MatchInit; slot: number } | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const bot = useRef<WorkerBot | null>(null);
-  const loading = useRef<Promise<WorkerBot | null>>(Promise.resolve(null));
+  const bot = useRef<BrowserBot | null>(null);
+  const loading = useRef<Promise<BrowserBot | null>>(Promise.resolve(null));
   const matchId = useRef<string | null>(null);
   const mySlot = useRef(0);
   const rendererRef = useRef(renderer);
@@ -38,7 +39,7 @@ export function useCasualRoom(
       mySlot.current = slot;
       bot.current?.dispose();
       bot.current = null;
-      const created = WorkerBot.create(
+      const created = createBrowserBot(
         sourceRef.current(),
         botSeed(Date.now(), slot),
         eventsRef.current,

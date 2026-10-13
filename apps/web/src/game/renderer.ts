@@ -37,6 +37,7 @@ interface PlayerSprite {
   targetX: number;
   targetY: number;
   alive: boolean;
+  facing: SnapshotPlayer['facing'];
 }
 
 class ArenaScene extends Phaser.Scene {
@@ -49,6 +50,7 @@ class ArenaScene extends Phaser.Scene {
   private players = new Map<number, PlayerSprite>();
   private markers = new Map<number, Phaser.GameObjects.Graphics>();
   private highlighted: readonly number[] = [];
+  private halted = false;
   muted = true;
 
   constructor() {
@@ -201,12 +203,34 @@ class ArenaScene extends Phaser.Scene {
     this.bombs.clear();
     this.flames.clear();
     this.players.clear();
+    this.halted = false;
+  }
+
+  /**
+   * Freezes the arena when no more snapshots will come (stopped, paused, or over):
+   * walking players stand still and bombs and flames stop animating.
+   */
+  halt(): void {
+    if (!this.ready) return;
+    this.halted = true;
+    for (const entry of this.players.values()) {
+      if (!entry.alive) continue;
+      entry.sprite.anims.stop();
+      entry.sprite.setFrame(IDLE_FRAMES[entry.facing]);
+    }
+    for (const sprite of this.bombs.values()) sprite.anims.pause();
+    for (const { sprite } of this.flames.values()) sprite.anims.pause();
   }
 
   apply(snapshot: Snapshot, instant: boolean): void {
     if (!this.ready) {
       this.queued = { snapshot, instant };
       return;
+    }
+    if (this.halted) {
+      this.halted = false;
+      for (const sprite of this.bombs.values()) sprite.anims.resume();
+      for (const { sprite } of this.flames.values()) sprite.anims.resume();
     }
     const wallOwners = new Map<number, number>();
     for (const event of snapshot.events) {
@@ -220,6 +244,7 @@ class ArenaScene extends Phaser.Scene {
     this.syncBombs(snapshot);
     this.syncFlames(snapshot);
     for (const player of snapshot.players) this.syncPlayer(player, instant);
+    if (snapshot.status === 'finished') this.halt();
   }
 
   private syncWalls(snapshot: Snapshot, owners: Map<number, number>, instant: boolean): void {
@@ -326,7 +351,7 @@ class ArenaScene extends Phaser.Scene {
         .sprite(targetX, targetY, `${color}-bm`, IDLE_FRAMES.down)
         .setOrigin(0.47, 0.7)
         .setDepth(10);
-      entry = { sprite, targetX, targetY, alive: true };
+      entry = { sprite, targetX, targetY, alive: true, facing: player.facing };
       this.players.set(player.id, entry);
       if (!player.alive) {
         entry.alive = false;
@@ -335,6 +360,7 @@ class ArenaScene extends Phaser.Scene {
     }
     entry.targetX = targetX;
     entry.targetY = targetY;
+    entry.facing = player.facing;
     const { sprite } = entry;
     if (instant) {
       sprite.setPosition(targetX, targetY);
@@ -401,6 +427,11 @@ export class ArenaRenderer {
   reset(snapshot?: Snapshot): void {
     this.scene?.clearAll();
     if (snapshot) this.push(snapshot, true);
+  }
+
+  /** Freezes the current frame; the next `push` brings the arena back to life. */
+  halt(): void {
+    this.scene?.halt();
   }
 
   setHighlighted(slots: readonly number[]): void {
