@@ -1,40 +1,44 @@
 {
-  "name": "bomberman-ai-server",
-  "version": "1.0.0",
-  "description": "Bomberman AI server Node.js application.",
-  "main": "main.js",
-  "scripts": {
-    "start": "node .",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/lahordeschool/bomberman-ai-server"
-  },
-  "keywords": [
-    "La Horde",
-    "Bomberman",
-    "Node.js",
-    "Videogame",
-    "app"
-  ],
-  "author": "La Horde forked from Marco Cavalli",
+  "name": "bomberman-ai-platform",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Competitive Bomberman platform where players write the AI that controls their bomber.",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/lahordeschool/bomberman-ai-server/issues"
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
   },
-  "homepage": "https://github.com/lahordeschool/bomberman-ai-server#readme",
-  "dependencies": {
-    "@popperjs/core": "^2.4.4",
-    "bootstrap": "^4.5.0",
-    "express": "^4.17.1",
-    "font-awesome": "^4.7.0",
-    "jquery": "^3.5.1",
-    "jquery-ui": "^1.12.1",
-    "jquery-ui-css": "^1.11.5",
-    "phaser": "^3.23.0",
-    "popper.js": "^1.16.1",
-    "socket.io": "^2.3.0",
-    "underscore": "^1.10.2"
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n runner,server,web -c yellow,cyan,magenta \"npm run dev -w @bomberman/bot-runner\" \"npm run dev -w @bomberman/server\" \"npm run dev -w @bomberman/web\"",
+    "build": "npm run build -w @bomberman/web",
+    "start": "npm run start -w @bomberman/server",
+    "typecheck": "tsc -p tsconfig.json && tsc -p apps/web/tsconfig.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "check": "npm run lint && npm run typecheck && npm run test",
+    "db:migrate": "npm run db:migrate -w @bomberman/server",
+    "ratings:rebuild": "npm run ratings:rebuild -w @bomberman/server"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.0",
+    "@types/node": "^24.19.2",
+    "concurrently": "^10.0.6",
+    "eslint": "^10.12.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "fast-check": "^4.10.2",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.4"
   }
 }

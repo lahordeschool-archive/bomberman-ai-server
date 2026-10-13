@@ -1,0 +1,10 @@
+node_modules
+dist
+coverage
+playwright-report
+test-results
+data
+backups
+sprite_bomberman
+*.sql
+package-lock.json

@@ -1,0 +1,106 @@
+# Production stack: Caddy (TLS edge) -> server -> bot-runner / PostgreSQL.
+# Only Caddy publishes ports. PostgreSQL sits on an internal network with no route to
+# the internet, and the bot runner cannot reach it. The runner joins the `egress`
+# network so bots can call public APIs; its fetch refuses private and reserved
+# addresses, so bot requests cannot reach the server or other containers.
+#
+#   cp .env.example .env   # then fill in the secrets
+#   docker compose up -d --build
+
+name: bomber-arena
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ['no-new-privileges:true']
+  tmpfs: ['/tmp:size=16m']
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: '10m', max-file: '5' }
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      server:
+        condition: service_healthy
+    networks: [edge]
+
+  server:
+    <<: *hardening
+    build: { context: ., target: server }
+    image: bomber-arena/server:${TAG:-latest}
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://bomber:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/bomber
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN in .env}
+      RUNNER_URL: http://bot-runner:8090
+      RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN in .env}
+      TRUST_PROXY: uniquelocal
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      RANKED_CONCURRENCY: ${RANKED_CONCURRENCY:-2}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      bot-runner:
+        condition: service_healthy
+    networks: [edge, data, sandbox]
+    mem_limit: 512m
+    pids_limit: 256
+
+  bot-runner:
+    <<: *hardening
+    build: { context: ., target: bot-runner }
+    image: bomber-arena/bot-runner:${TAG:-latest}
+    environment:
+      NODE_ENV: production
+      RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN in .env}
+      RUNNER_WORKERS: ${RUNNER_WORKERS:-2}
+      RUNNER_MAX_SESSIONS: ${RUNNER_MAX_SESSIONS:-64}
+      BOT_MEMORY_MB: ${BOT_MEMORY_MB:-32}
+      BOT_FETCH: ${BOT_FETCH:-on}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    networks: [sandbox, egress]
+    mem_limit: 1g
+    cpus: ${RUNNER_CPUS:-2}
+    pids_limit: 128
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bomber
+      POSTGRES_USER: bomber
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bomber -d bomber']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [data]
+    shm_size: 128m
+
+networks:
+  edge: {}
+  data: { internal: true }
+  sandbox: { internal: true }
+  egress: {}
+
+volumes:
+  pg-data: {}
+  caddy-data: {}
+  caddy-config: {}

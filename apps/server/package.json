@@ -1,0 +1,31 @@
+{
+  "name": "@bomberman/server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.ts",
+    "start": "node src/index.ts",
+    "db:migrate": "node src/cli/migrate.ts",
+    "ratings:rebuild": "node src/cli/rebuild-ratings.ts"
+  },
+  "dependencies": {
+    "@bomberman/bot-sdk": "*",
+    "@bomberman/game-engine": "*",
+    "@bomberman/protocol": "*",
+    "@electric-sql/pglite": "^0.5.9",
+    "@fastify/cookie": "^11.1.3",
+    "@fastify/helmet": "^13.1.2",
+    "@fastify/rate-limit": "^11.2.1",
+    "@fastify/static": "^10.1.6",
+    "@node-rs/argon2": "^2.2.2",
+    "fastify": "^5.12.7",
+    "pg": "^8.23.1",
+    "socket.io": "^4.8.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "socket.io-client": "^4.8.4"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@bomberman/bot-runner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.ts",
+    "start": "node src/index.ts"
+  },
+  "dependencies": {
+    "@bomberman/bot-sdk": "*",
+    "@bomberman/game-engine": "*",
+    "quickjs-emscripten": "^0.32.0",
+    "undici": "^7.30.0"
+  }
+}

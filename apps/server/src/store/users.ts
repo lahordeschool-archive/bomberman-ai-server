@@ -1,0 +1,71 @@
+import type { PublicUser } from '@bomberman/protocol';
+import type { Queryable } from '../db/database.ts';
+import { iso } from '../db/rows.ts';
+
+export interface UserRow {
+  id: string;
+  username: string;
+  display_name: string;
+  password_hash: string;
+  is_house: boolean;
+  created_at: Date;
+}
+
+export function toPublicUser(row: UserRow): PublicUser {
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    createdAt: iso(row.created_at),
+  };
+}
+
+export async function createUser(
+  db: Queryable,
+  input: { username: string; displayName: string; passwordHash: string; isHouse?: boolean },
+): Promise<UserRow> {
+  const { rows } = await db.query<UserRow>(
+    `insert into users (username, display_name, password_hash, is_house)
+     values ($1, $2, $3, $4) returning *`,
+    [input.username, input.displayName, input.passwordHash, input.isHouse ?? false],
+  );
+  return rows[0]!;
+}
+
+export async function findUserByUsername(db: Queryable, username: string): Promise<UserRow | null> {
+  const { rows } = await db.query<UserRow>('select * from users where username = $1', [username]);
+  return rows[0] ?? null;
+}
+
+export async function findUserById(db: Queryable, id: string): Promise<UserRow | null> {
+  const { rows } = await db.query<UserRow>('select * from users where id = $1', [id]);
+  return rows[0] ?? null;
+}
+
+export async function updatePasswordHash(
+  db: Queryable,
+  userId: string,
+  passwordHash: string,
+): Promise<void> {
+  await db.query('update users set password_hash = $2, password_changed_at = now() where id = $1', [
+    userId,
+    passwordHash,
+  ]);
+}
+
+export async function recordAudit(
+  db: Queryable,
+  entry: {
+    userId: string | null;
+    action: string;
+    ip?: string | null;
+    detail?: Record<string, unknown>;
+  },
+): Promise<void> {
+  await db.query('insert into audit_log (user_id, action, ip, detail) values ($1, $2, $3, $4)', [
+    entry.userId,
+    entry.action,
+    entry.ip ?? null,
+    entry.detail ? JSON.stringify(entry.detail) : null,
+  ]);
+}

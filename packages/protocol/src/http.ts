@@ -1,0 +1,172 @@
+import { z } from 'zod';
+
+export const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
+
+export function normalizeUsername(raw: string): string {
+  return raw.normalize('NFKC').trim().toLowerCase();
+}
+
+export const usernameSchema = z
+  .string()
+  .transform(normalizeUsername)
+  .pipe(
+    z.string().regex(USERNAME_PATTERN, 'Use 3 to 24 lowercase letters, digits, or underscores'),
+  );
+
+export const passwordSchema = z
+  .string()
+  .min(8, 'Use at least 8 characters')
+  .max(200, 'Use at most 200 characters');
+
+export const displayNameSchema = z
+  .string()
+  .transform((value) => value.normalize('NFKC').trim().replace(/\s+/g, ' '))
+  .pipe(z.string().min(1).max(32));
+
+export const registerBody = z.object({
+  username: usernameSchema,
+  password: passwordSchema,
+  displayName: displayNameSchema.optional(),
+});
+
+export const loginBody = z.object({
+  username: z.string().max(64).transform(normalizeUsername),
+  password: z.string().max(200),
+});
+
+export const changePasswordBody = z.object({
+  currentPassword: z.string().max(200),
+  newPassword: passwordSchema,
+});
+
+export const botNameSchema = z
+  .string()
+  .transform((value) => value.normalize('NFKC').trim().replace(/\s+/g, ' '))
+  .pipe(
+    z
+      .string()
+      .min(2)
+      .max(32)
+      .regex(/^[\p{L}\p{N} _.'-]+$/u, "Use letters, digits, spaces, and . _ ' -"),
+  );
+
+export const createBotBody = z.object({ name: botNameSchema });
+export const updateBotBody = z.object({ name: botNameSchema });
+
+export const visibilitySchema = z.enum(['private', 'public']);
+
+export const submitVersionBody = z.object({
+  source: z
+    .string()
+    .min(1)
+    .max(64 * 1024),
+  visibility: visibilitySchema.default('private'),
+});
+
+export const paginationQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  offset: z.coerce.number().int().min(0).max(100_000).default(0),
+});
+
+export const matchListQuery = paginationQuery.extend({
+  botId: z.uuid().optional(),
+  username: z.string().max(64).transform(normalizeUsername).optional(),
+});
+
+export const idParam = z.object({ id: z.uuid() });
+export const versionParam = z.object({ id: z.uuid(), versionId: z.uuid() });
+
+export interface PublicUser {
+  id: string;
+  username: string;
+  displayName: string;
+  createdAt: string;
+}
+
+export interface SessionResponse {
+  user: PublicUser | null;
+  csrfToken: string | null;
+}
+
+export interface BotSummary {
+  id: string;
+  name: string;
+  owner: { username: string; displayName: string; isHouse: boolean };
+  activeVersion: { id: string; version: number; createdAt: string } | null;
+  rating: { rating: number; games: number; wins: number } | null;
+  queued: boolean;
+  createdAt: string;
+}
+
+export interface BotVersionSummary {
+  id: string;
+  version: number;
+  sourceHash: string;
+  sdkVersion: number;
+  visibility: 'private' | 'public';
+  createdAt: string;
+}
+
+export interface BotVersionDetail extends BotVersionSummary {
+  source: string | null;
+}
+
+export interface BotDetail extends BotSummary {
+  versions: BotVersionSummary[];
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  botId: string;
+  botName: string;
+  owner: { username: string; displayName: string; isHouse: boolean };
+  rating: number;
+  games: number;
+  wins: number;
+}
+
+export interface MatchParticipantSummary {
+  slot: number;
+  botId: string | null;
+  botName: string;
+  botVersion: number | null;
+  owner: { username: string; displayName: string; isHouse: boolean } | null;
+  placement: number | null;
+  score: number | null;
+  kills: number | null;
+  ratingBefore: number | null;
+  ratingAfter: number | null;
+}
+
+export interface MatchSummary {
+  id: string;
+  kind: 'ranked' | 'casual';
+  status: 'running' | 'completed' | 'aborted';
+  startedAt: string;
+  endedAt: string | null;
+  endTick: number | null;
+  winnerSlot: number | null;
+  participants: MatchParticipantSummary[];
+}
+
+export interface ReplayResponse {
+  matchId: string;
+  engineVersion: number;
+  seed: number;
+  playerCount: number;
+  settings: { bombs: number; flames: number; speed: number; maxTicks: number };
+  finalHash: string;
+  intents: [tick: number, slot: number, intent: string][];
+}
+
+export interface RankedStatus {
+  queue: { botId: string; botName: string; enqueuedAt: string }[];
+  queueLength: number;
+  liveMatches: MatchSummary[];
+}
+
+export interface ApiError {
+  error: string;
+  message: string;
+  issues?: { path: string; message: string }[];
+}

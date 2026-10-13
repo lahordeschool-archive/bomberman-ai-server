@@ -1,0 +1,36 @@
+{
+	servers {
+		timeouts {
+			read_header 10s
+			idle 2m
+		}
+	}
+}
+
+# SITE_ADDRESS is your domain (automatic HTTPS) or `localhost` for a local trial.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	request_body {
+		max_size 256KB
+	}
+
+	header {
+		-Server
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
+	# Health and readiness stay internal.
+	@internal path /readyz
+	respond @internal 404
+
+	reverse_proxy server:8080 {
+		health_uri /healthz
+		health_interval 15s
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

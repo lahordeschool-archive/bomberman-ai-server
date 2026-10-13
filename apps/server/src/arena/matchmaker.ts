@@ -1,0 +1,191 @@
+import { botSeed, DECISION_BUDGET_MS } from '@bomberman/bot-sdk';
+import { MAX_PLAYERS as MAX_PLAYERS_PER_MATCH, randomSeed } from '@bomberman/game-engine';
+import type { FastifyBaseLogger } from 'fastify';
+import type { AppContext } from '../context.ts';
+import { BotRejectedError, RunnerUnavailableError } from '../runner/executor.ts';
+import {
+  dequeueBot,
+  getVersionSources,
+  listQueue,
+  markMatched,
+  type QueueEntry,
+} from '../store/bots.ts';
+import type { Arena, ArenaParticipant } from './arena.ts';
+
+interface Pick {
+  botId: string;
+  versionId: string;
+  name: string;
+  owner: string;
+  kind: 'ranked' | 'house';
+  ownerId: string | null;
+}
+
+/**
+ * Builds ranked matches from the queue: the bot that waited longest is matched with
+ * the closest rated queued bots, and house bots fill the remaining seats. Every bot
+ * runs inside the isolated runner; only these server completed matches are rated.
+ */
+export class Matchmaker {
+  private readonly context: AppContext;
+  private readonly arena: Arena;
+  private readonly log: FastifyBaseLogger;
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private running: Promise<void> | null = null;
+  private again = false;
+  private stopped = false;
+
+  constructor(context: AppContext, arena: Arena, log: FastifyBaseLogger) {
+    this.context = context;
+    this.arena = arena;
+    this.log = log;
+  }
+
+  start(): void {
+    if (this.timer || this.context.config.rankedConcurrency === 0) return;
+    this.timer = setInterval(() => this.nudge(), this.context.config.matchmakerIntervalMs);
+    this.timer.unref();
+    this.nudge();
+  }
+
+  stop(): Promise<void> {
+    this.stopped = true;
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+    return this.running ?? Promise.resolve();
+  }
+
+  nudge(): void {
+    if (this.stopped) return;
+    if (this.running) {
+      this.again = true;
+      return;
+    }
+    this.running = this.fill()
+      .then(() => undefined)
+      .catch((error: unknown) => this.log.error({ err: error }, 'matchmaker failed'))
+      .finally(() => {
+        this.running = null;
+        if (this.again && this.timer) {
+          this.again = false;
+          this.nudge();
+        }
+      });
+  }
+
+  /** Starts matches until the concurrency limit is reached or nobody is waiting. */
+  async fill(): Promise<string[]> {
+    const started: string[] = [];
+    while (
+      !this.stopped &&
+      this.arena.runningCount('ranked') < this.context.config.rankedConcurrency
+    ) {
+      const busy = this.arena.busyBotIds();
+      const queue = (await listQueue(this.context.db, 200)).filter(
+        (entry) => !busy.has(entry.botId),
+      );
+      if (queue.length === 0) break;
+      const matchId = await this.startMatch(this.pick(queue));
+      if (!matchId) break;
+      started.push(matchId);
+    }
+    return started;
+  }
+
+  private pick(queue: QueueEntry[]): Pick[] {
+    const [anchor, ...rest] = queue;
+    const opponents = rest
+      .sort((a, b) => Math.abs(a.rating - anchor!.rating) - Math.abs(b.rating - anchor!.rating))
+      .slice(0, MAX_PLAYERS_PER_MATCH - 1);
+    const picks: Pick[] = [anchor!, ...opponents].map((entry) => ({
+      botId: entry.botId,
+      versionId: entry.versionId,
+      name: entry.botName,
+      owner: '',
+      kind: 'ranked',
+      ownerId: entry.ownerId,
+    }));
+    for (const house of this.context.house) {
+      if (picks.length >= MAX_PLAYERS_PER_MATCH) break;
+      picks.push({
+        botId: house.botId,
+        versionId: house.versionId,
+        name: house.name,
+        owner: 'House',
+        kind: 'house',
+        ownerId: null,
+      });
+    }
+    return picks;
+  }
+
+  private async startMatch(picks: Pick[]): Promise<string | null> {
+    const { db, executor } = this.context;
+    const sources = await getVersionSources(
+      db,
+      picks.map((pick) => pick.versionId),
+    );
+    const owners = await db.query<{ bot_id: string; owner_id: string; display_name: string }>(
+      `select b.id as bot_id, u.id as owner_id, u.display_name from bots b join users u on u.id = b.owner_id
+       where b.id = any($1::uuid[])`,
+      [picks.map((pick) => pick.botId)],
+    );
+    const ownerOf = new Map(owners.rows.map((row) => [row.bot_id, row]));
+    const matchSeed = randomSeed();
+    const participants: ArenaParticipant[] = [];
+    try {
+      for (const [slot, pick] of picks.entries()) {
+        let controller = null;
+        try {
+          controller = await executor.createSession(
+            sources.get(pick.versionId) ?? '',
+            botSeed(matchSeed, slot),
+          );
+        } catch (error) {
+          if (!(error instanceof BotRejectedError)) throw error;
+          // A version that no longer loads still plays (idle) so the result stays honest.
+          this.log.warn(
+            { botId: pick.botId, err: error.message },
+            'ranked bot failed to load; removed from queue',
+          );
+          await dequeueBot(db, pick.botId);
+        }
+        const owner = ownerOf.get(pick.botId);
+        participants.push({
+          info: { name: pick.name, owner: owner?.display_name ?? pick.owner, kind: pick.kind },
+          record: {
+            kind: pick.kind,
+            botId: pick.botId,
+            botVersionId: pick.versionId,
+            userId: owner?.owner_id ?? null,
+            botName: pick.name,
+          },
+          controller,
+        });
+      }
+    } catch (error) {
+      await Promise.allSettled(
+        participants.map((participant) => participant.controller?.dispose?.()),
+      );
+      if (error instanceof RunnerUnavailableError) {
+        this.log.warn('bot runner unavailable; ranked matchmaking paused');
+        return null;
+      }
+      throw error;
+    }
+
+    await markMatched(
+      db,
+      picks.filter((pick) => pick.kind === 'ranked').map((pick) => pick.botId),
+    );
+    const { matchId } = await this.arena.start({
+      kind: 'ranked',
+      seed: matchSeed,
+      participants,
+      decisionTimeoutMs: DECISION_BUDGET_MS,
+      maxTicks: this.context.config.rankedMaxTicks,
+      onFinished: () => this.nudge(),
+    });
+    return matchId;
+  }
+}
