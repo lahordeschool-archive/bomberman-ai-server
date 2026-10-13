@@ -775,7 +775,7 @@ a.match-row:hover {
 
 @media (max-width: 900px) {
   .hero {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .hero-title {
     font-size: 36px;
@@ -805,10 +805,14 @@ a.match-row:hover {
   border-radius: var(--radius-2xl);
   overflow: hidden;
 }
+/* Phaser sizes the canvas from this box, border included, and refits every half
+   second: a border or an auto-sized grid column grows the arena a little each time. */
 .demo-arena .arena-canvas {
-  border: 1px solid var(--surface-3);
+  outline: 1px solid var(--surface-3);
+  outline-offset: -1px;
 }
 .arena-canvas canvas {
+  display: block;
   image-rendering: pixelated;
 }
 .arena-sound {
