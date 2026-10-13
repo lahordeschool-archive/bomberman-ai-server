@@ -319,6 +319,23 @@ test.describe('bots', () => {
   });
 });
 
+test.describe('arena', () => {
+  test('stopping a test freezes every player and animation', async ({ page }) => {
+    await register(page);
+    await createBot(page, 'Freeze Bot');
+    await setSource(page, WALKER);
+    await page.getByRole('button', { name: 'Run test' }).click();
+    await expect(page.locator('.console-lines')).toContainText('walker ready');
+    await page.waitForTimeout(1500);
+    await page.getByRole('button', { name: 'Stop' }).click();
+    await page.waitForTimeout(300);
+    const canvas = page.locator('.arena canvas, canvas').first();
+    const before = await canvas.screenshot();
+    await page.waitForTimeout(800);
+    expect((await canvas.screenshot()).equals(before)).toBe(true);
+  });
+});
+
 test.describe('browsers without Web Workers', () => {
   test('local tests fall back to QuickJS, with the ranked CPU budget', async ({ page }) => {
     await page.route('**/bot-worker-*.js', (route) => route.abort());

@@ -69,8 +69,9 @@ describe('movement', () => {
 
   it('speed sets the turn interval, and a move ends one tick before the next turn', () => {
     expect([0, 1, 2, 3].map((speed) => turnTicks(speed))).toEqual([...TURN_TICKS_BY_SPEED]);
-    expect(turnTicks(1)).toBe(OBSERVATION_INTERVAL_TICKS);
-    expect(turnTicks(100)).toBe(3);
+    expect(turnTicks(1)).toBe(6);
+    expect(turnTicks(100)).toBe(4);
+    expect([0, 1, 2, 3].map((speed) => turnTicks(speed, 2))).toEqual([8, 5, 4, 3]);
     for (let speed = 0; speed <= maxSpeed(); speed++) {
       expect(moveDurationTicks(speed)).toBe(turnTicks(speed) - 1);
     }
@@ -190,7 +191,7 @@ describe('items', () => {
     expect(player.flameRange).toBe(MAX_FLAME_RANGE);
     expect(player.speed).toBe(0);
     expect(player.collected).toEqual(['extraBomb', 'maxFlame', 'speedDown']);
-    expect(turnTicks(player.speed)).toBeGreaterThan(OBSERVATION_INTERVAL_TICKS);
+    expect(turnTicks(player.speed)).toBeGreaterThan(turnTicks(1));
   });
 
   it('caps roller skates at the fastest turn interval', () => {

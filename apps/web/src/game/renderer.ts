@@ -157,7 +157,7 @@ class ArenaScene extends Phaser.Scene {
       sprite.y += (entry.targetY - sprite.y) * factor;
       sprite.setDepth(10 + sprite.y / HEIGHT);
     }
-    const bob = Math.round(Math.sin(time / 180) * 1.5);
+    const bob = this.halted ? 0 : Math.round(Math.sin(time / 180) * 1.5);
     for (const [slot, marker] of this.markers) {
       const entry = this.players.get(slot);
       const visible = Boolean(entry?.alive && entry.sprite.visible);

@@ -7,7 +7,7 @@ export interface SampleBot {
 
 export const STARTER_SOURCE = `/**
  * Your bot. gameLoop is called once per turn with an observation. A turn lasts
- * 250 ms (5 game ticks), 200 or 150 ms with roller skates (speedUp), 400 ms after a
+ * 300 ms (6 game ticks), 250 or 200 ms with roller skates (speedUp), 400 ms after a
  * speedDown; each turn is one decision and at most one tile.
  *
  *   obs.grid[y][x]   0 floor, 1 indestructible wall, 2 destructible wall

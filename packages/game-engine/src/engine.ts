@@ -19,6 +19,7 @@ import {
   SUPPORTED_ENGINE_VERSIONS,
   TICK_MS,
   TURN_TICKS_BY_SPEED,
+  TURN_TICKS_BY_SPEED_V2,
   type Direction,
   type ItemType,
 } from './constants.ts';
@@ -121,15 +122,18 @@ export function cloneState(state: GameState): GameState {
   return structuredClone(state);
 }
 
+const turnTable = (engineVersion: number) =>
+  engineVersion === 2 ? TURN_TICKS_BY_SPEED_V2 : TURN_TICKS_BY_SPEED;
+
 export function maxSpeed(engineVersion: number = ENGINE_VERSION): number {
-  return engineVersion === 1 ? MAX_SPEED : TURN_TICKS_BY_SPEED.length - 1;
+  return engineVersion === 1 ? MAX_SPEED : turnTable(engineVersion).length - 1;
 }
 
 /** Ticks between two decisions of a player with this speed. */
 export function turnTicks(speed: number, engineVersion: number = ENGINE_VERSION): number {
   if (engineVersion === 1) return OBSERVATION_INTERVAL_TICKS;
-  const level = clampInt(speed, MIN_SPEED, TURN_TICKS_BY_SPEED.length - 1);
-  return TURN_TICKS_BY_SPEED[level]!;
+  const table = turnTable(engineVersion);
+  return table[clampInt(speed, MIN_SPEED, table.length - 1)]!;
 }
 
 /**

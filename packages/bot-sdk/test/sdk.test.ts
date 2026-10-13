@@ -162,7 +162,7 @@ describe('sample bots and match loop', () => {
     expect(seen.get(0)).toHaveLength(Math.ceil(120 / turnTicks(0)));
     expect(seen.get(1)).toHaveLength(Math.ceil(120 / turnTicks(1)));
     expect(seen.get(2)).toHaveLength(Math.ceil(120 / turnTicks(3)));
-    expect(seen.get(2)!.slice(0, 3)).toEqual([0, 3, 6]);
+    expect(seen.get(2)!.slice(0, 3)).toEqual([0, turnTicks(3), 2 * turnTicks(3)]);
   });
 
   it('the cautious bomber survives its own bombs and usually beats random walkers', async () => {

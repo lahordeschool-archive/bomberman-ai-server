@@ -135,6 +135,7 @@ export function useCasualRoom(
     start: (houseBots: string[]) => run(() => emitWithAck('casual:start', { houseBots })),
     leave: () => {
       getSocket().emit('casual:leave');
+      rendererRef.current?.halt();
       setLobby(null);
       setMatch(null);
       matchId.current = null;

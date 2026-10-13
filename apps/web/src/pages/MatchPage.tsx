@@ -64,6 +64,10 @@ function ReplayPlayer({
   useEffect(() => show(0, true), [show]);
 
   useEffect(() => {
+    if (!playing) renderer?.halt();
+  }, [playing, renderer]);
+
+  useEffect(() => {
     if (!playing) return;
     const timer = setInterval(() => {
       if (indexRef.current >= last) {
@@ -100,6 +104,7 @@ function ReplayPlayer({
         onChange={(event) => {
           setPlaying(false);
           show(Number(event.target.value), true);
+          renderer?.halt();
         }}
       />
       <span className="mono">

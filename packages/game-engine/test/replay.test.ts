@@ -94,24 +94,30 @@ describe('deterministic replay', () => {
     expect(hashState(replayed)).not.toBe(hashState(state));
   });
 
-  it('still re-simulates matches recorded with engine v1 under v1 rules', () => {
-    const decisions: Intent[][] = [
-      [{ type: 'move', direction: 'right' }, { type: 'move', direction: 'left' }],
-      [{ type: 'move', direction: 'right' }, { type: 'bomb' }],
-      [{ type: 'bomb' }, { type: 'move', direction: 'down' }],
-    ];
-    const live = simulateLive(11, 2, decisions, 400, 1);
-    const replay = {
-      engineVersion: 1,
-      seed: 11,
-      playerCount: 2,
-      settings: live.state.settings,
-      intents: live.log,
-    };
-    const replayed = runReplay(replay);
-    expect(replayed.engineVersion).toBe(1);
-    expect(hashState(replayed)).toBe(hashState(live.state));
-  });
+  it.each([1, 2])(
+    'still re-simulates matches recorded with engine v%i under its rules',
+    (version) => {
+      const decisions: Intent[][] = [
+        [
+          { type: 'move', direction: 'right' },
+          { type: 'move', direction: 'left' },
+        ],
+        [{ type: 'move', direction: 'right' }, { type: 'bomb' }],
+        [{ type: 'bomb' }, { type: 'move', direction: 'down' }],
+      ];
+      const live = simulateLive(11, 2, decisions, 400, version);
+      const replay = {
+        engineVersion: version,
+        seed: 11,
+        playerCount: 2,
+        settings: live.state.settings,
+        intents: live.log,
+      };
+      const replayed = runReplay(replay);
+      expect(replayed.engineVersion).toBe(version);
+      expect(hashState(replayed)).toBe(hashState(live.state));
+    },
+  );
 
   it('rejects replays recorded by another engine version', () => {
     expect(() =>

@@ -80,6 +80,7 @@ export function useLocalMatch(renderer: ArenaRenderer | null) {
         setStatus('finished');
       } catch (failure) {
         if (controller.signal.aborted) {
+          if (abort.current === null) rendererRef.current?.halt();
           setStatus('idle');
         } else {
           setError(failure instanceof Error ? failure.message : String(failure));

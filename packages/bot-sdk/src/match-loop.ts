@@ -13,9 +13,9 @@ import { parseAction } from './actions.ts';
 import { buildObservation, type Observation } from './observation.ts';
 
 /**
- * Time a bot has to answer an observation in a real-time match at the starting
- * speed: the turn interval (250 ms) minus a small margin. Later answers are dropped
- * and the player skips that turn; the game never waits for a bot.
+ * Longest time a bot has to answer an observation in a real-time match; turns
+ * shorter than 250 ms (roller skates) leave less, see `turnBudgetMs`. Later answers
+ * are dropped and the player skips that turn; the game never waits for a bot.
  */
 export const DECISION_BUDGET_MS = OBSERVATION_INTERVAL_TICKS * TICK_MS - 10;
 

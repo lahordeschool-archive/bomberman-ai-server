@@ -169,7 +169,7 @@ function Landing() {
           <li>
             <Code aria-hidden />
             <h3>Write a gameLoop</h3>
-            <p>Every 250 ms your function reads the grid and returns a move or a bomb.</p>
+            <p>Every 300 ms your function reads the grid and returns a move or a bomb.</p>
           </li>
           <li>
             <Flask aria-hidden />

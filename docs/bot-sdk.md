@@ -8,8 +8,8 @@ function gameLoop(obs) {
 }
 ```
 
-It is called once per turn, every 250 ms of game time at the starting speed (every
-5 ticks of 50 ms; roller skates make turns come faster), with an observation of the
+It is called once per turn, every 300 ms of game time at the starting speed (every
+6 ticks of 50 ms; roller skates make turns come faster), with an observation of the
 arena, and returns one action. Top level variables persist between calls, so
 you can keep memory across turns.
 
@@ -34,9 +34,9 @@ Your speed sets how often you play. Each turn is one decision and at most one ti
 | `speed` | How you get there        | Turn (`obs.decisionIntervalTicks`) | Answer within |
 | ------- | ------------------------ | ---------------------------------- | ------------- |
 | 0       | picked up a `speedDown`  | 8 ticks (400 ms)                   | 240 ms        |
-| 1       | starting speed           | 5 ticks (250 ms)                   | 240 ms        |
-| 2       | one `speedUp`            | 4 ticks (200 ms)                   | 190 ms        |
-| 3 (max) | two or more `speedUp`    | 3 ticks (150 ms)                   | 140 ms        |
+| 1       | starting speed           | 6 ticks (300 ms)                   | 240 ms        |
+| 2       | one `speedUp`            | 5 ticks (250 ms)                   | 240 ms        |
+| 3 (max) | two or more `speedUp`    | 4 ticks (200 ms)                   | 190 ms        |
 
 You need no code for it: `gameLoop` is just called more (or less) often. A faster
 player outruns blasts and reaches items first, and gets less time per answer.
@@ -47,7 +47,7 @@ player outruns blasts and reaches items first, and gets less time per answer.
 | `flameUp`   | +1 blast range (max 10)                                            |
 | `maxFlame`  | blast range jumps to 10: rare, and your bombs now cross the map    |
 | `speedUp`   | roller skates: +1 speed, up to 3                                   |
-| `speedDown` | -1 speed, down to 0: you play every 400 ms instead of 250 ms       |
+| `speedDown` | -1 speed, down to 0: you play every 400 ms instead of 300 ms       |
 
 Every pickup scores 10 points, even when you are already at the cap. Your current
 values are in `obs.me` (`bombCapacity`, `bombsAvailable`, `flameRange`, `speed`,
@@ -118,7 +118,7 @@ interface Observation {
   sdkVersion: 1;
   tick: number; // current tick, starts at 0
   tickMs: 50;
-  decisionIntervalTicks: number; // ticks until your next turn: 8, 5, 4 or 3 by speed
+  decisionIntervalTicks: number; // ticks until your next turn: 8, 6, 5 or 4 by speed
   maxTicks: number; // the match ends on timeout at this tick
   width: 15;
   height: 13;
