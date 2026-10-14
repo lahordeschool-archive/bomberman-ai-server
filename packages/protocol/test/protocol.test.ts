@@ -11,11 +11,27 @@ import {
 
 describe('protocol schemas', () => {
   it('normalizes usernames and rejects invalid ones', () => {
-    expect(registerBody.parse({ username: '  Alice_42 ', password: 'longenough' }).username).toBe(
-      'alice_42',
-    );
-    expect(registerBody.safeParse({ username: 'a!', password: 'longenough' }).success).toBe(false);
-    expect(registerBody.safeParse({ username: 'alice', password: 'short' }).success).toBe(false);
+    expect(
+      registerBody.parse({
+        username: '  Alice_42 ',
+        email: '  Alice@Example.COM ',
+        password: 'longenough',
+      }),
+    ).toMatchObject({ username: 'alice_42', email: 'alice@example.com' });
+    expect(
+      registerBody.safeParse({ username: 'a!', email: 'a@b.co', password: 'longenough' }).success,
+    ).toBe(false);
+    expect(
+      registerBody.safeParse({ username: 'alice', email: 'alice@example.com', password: 'short' })
+        .success,
+    ).toBe(false);
+    expect(
+      registerBody.safeParse({ username: 'alice', password: 'longenough' }).success,
+    ).toBe(false);
+    expect(
+      registerBody.safeParse({ username: 'alice', email: 'not-an-email', password: 'longenough' })
+        .success,
+    ).toBe(false);
   });
 
   it('validates bot names and source sizes', () => {

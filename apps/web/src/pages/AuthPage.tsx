@@ -10,6 +10,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const { apply } = useSession();
   const { navigate, path } = useRouter();
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -23,6 +24,13 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     if (!normalized) next.username = 'Enter a username.';
     else if (isRegister && !USERNAME.test(normalized)) {
       next.username = 'Use 3 to 24 lowercase letters, digits, or underscores.';
+    }
+    if (isRegister) {
+      const normalizedEmail = email.trim();
+      if (!normalizedEmail) next.email = 'Enter an email address.';
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+        next.email = 'Enter a valid email address.';
+      }
     }
     if (!password) next.password = 'Enter a password.';
     else if (isRegister && password.length < 8) next.password = 'Use at least 8 characters.';
@@ -38,7 +46,12 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setBusy(true);
     try {
       const session = isRegister
-        ? await api.register({ username, password, displayName: displayName || undefined })
+        ? await api.register({
+            username,
+            email,
+            password,
+            displayName: displayName || undefined,
+          })
         : await api.login({ username, password });
       apply(session);
       if (path === '/login' || path === '/register') navigate('/');
@@ -58,7 +71,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
         <h1>{isRegister ? 'Create your account' : 'Sign in'}</h1>
         <p className="muted">
           {isRegister
-            ? 'Pick a username and a password. That is all you need to start writing bots.'
+            ? 'Pick a username, email, and password to start writing bots.'
             : 'Welcome back. Your bots are waiting.'}
         </p>
         <form onSubmit={onSubmit} noValidate>
@@ -72,15 +85,27 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
             required
           />
           {isRegister ? (
-            <Field
-              label="Display name"
-              name="displayName"
-              hint="Optional. Shown on the leaderboard."
-              value={displayName}
-              maxLength={32}
-              onChange={(event) => setDisplayName(event.target.value)}
-              error={errors.displayName}
-            />
+            <>
+              <Field
+                label="Email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                error={errors.email}
+                required
+              />
+              <Field
+                label="Display name"
+                name="displayName"
+                hint="Optional. Shown on the leaderboard."
+                value={displayName}
+                maxLength={32}
+                onChange={(event) => setDisplayName(event.target.value)}
+                error={errors.displayName}
+              />
+            </>
           ) : null}
           <Field
             label="Password"

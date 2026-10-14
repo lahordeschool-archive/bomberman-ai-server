@@ -27,7 +27,13 @@ const context: AppContext = {
 const { app, matchmaker, close } = await createServer(context);
 
 await migrate(db, (message) => app.log.info(message));
-await ensureSharkeyAdmin(db, config.sharkeyAdminPassword);
+const sharkey = await ensureSharkeyAdmin(db, config.sharkeyAdminPassword);
+if (sharkey.relocatedUsername) {
+  app.log.warn(
+    { relocatedUsername: sharkey.relocatedUsername },
+    'relocated pre-existing sharkey player so the reserved admin identity could be created',
+  );
+}
 context.house = await ensureHouseBots(db);
 const aborted = await abortStaleMatches(db);
 if (aborted > 0) app.log.warn({ count: aborted }, 'marked interrupted matches as aborted');

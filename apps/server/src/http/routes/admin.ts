@@ -59,7 +59,7 @@ export function registerAdminRoutes(app: FastifyInstance, context: AppContext): 
         liveMatches: count.live_matches,
         tournaments: count.tournaments,
       },
-      users: users.rows.map(toPublicUser),
+      users: users.rows.map((row) => toPublicUser(row, { includeEmail: true })),
       audit: audit.rows.map((row) => ({
         id: row.id,
         actor: row.actor,
@@ -108,7 +108,7 @@ export function registerAdminRoutes(app: FastifyInstance, context: AppContext): 
       ip: request.ip,
       detail: { targetUserId: id, role },
     });
-    return toPublicUser({ ...user, role });
+    return toPublicUser({ ...user, role }, { includeEmail: true });
   });
 
   app.post('/api/admin/tournaments', async (request, reply) => {

@@ -67,7 +67,7 @@ const query = (params: Record<string, string | number | undefined>) => {
 
 export const api = {
   session: () => request<SessionResponse>('GET', '/api/auth/session'),
-  register: (body: { username: string; password: string; displayName?: string }) =>
+  register: (body: { username: string; email: string; password: string; displayName?: string }) =>
     request<SessionResponse>('POST', '/api/auth/register', body),
   login: (body: { username: string; password: string }) =>
     request<SessionResponse>('POST', '/api/auth/login', body),

@@ -143,9 +143,14 @@ export class TestClient {
   }
 
   async register(username: string, password = 'correct horse battery') {
-    const response = await this.request('POST', '/api/auth/register', { username, password });
+    const email = `${username.trim().toLowerCase()}@example.test`;
+    const response = await this.request('POST', '/api/auth/register', {
+      username,
+      email,
+      password,
+    });
     if (response.status !== 201)
       throw new Error(`register failed: ${JSON.stringify(response.body)}`);
-    return response.body.user as { id: string; username: string };
+    return response.body.user as { id: string; username: string; email?: string | null };
   }
 }

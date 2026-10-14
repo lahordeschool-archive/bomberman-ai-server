@@ -32,6 +32,7 @@ describe('management and tournaments', () => {
       (
         await player.request('POST', '/api/auth/register', {
           username: 'sharkey',
+          email: 'sharkey@example.test',
           password: 'another secure password',
         })
       ).status,
@@ -43,6 +44,30 @@ describe('management and tournaments', () => {
     expect(overview.body.users).toEqual(
       expect.arrayContaining([expect.objectContaining({ username: 'sharkey', role: 'admin' })]),
     );
+  });
+
+  it('relocates a pre-existing sharkey player instead of failing startup', async () => {
+    const { app: otherApp, context: other } = await createTestApp();
+    try {
+      // Reproduce prod: a player registered as sharkey before the admin row existed.
+      await other.db.query(`delete from users where username = 'sharkey'`);
+      await other.db.query(
+        `insert into users (username, display_name, password_hash, role)
+         values ('sharkey', 'sharkey', '!', 'player')`,
+      );
+      const result = await ensureSharkeyAdmin(other.db, 'recovery password');
+      expect(result.relocatedUsername).toBe('sharkey_legacy');
+      const rows = await other.db.query<{ username: string; role: string }>(
+        `select username, role from users where username in ('sharkey', 'sharkey_legacy') order by username`,
+      );
+      expect(rows.rows).toEqual([
+        { username: 'sharkey', role: 'admin' },
+        { username: 'sharkey_legacy', role: 'player' },
+      ]);
+    } finally {
+      await otherApp.close();
+      await other.db.close();
+    }
   });
 
   it('runs registration against the bot current version instead of locking one', async () => {

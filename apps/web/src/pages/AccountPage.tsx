@@ -41,7 +41,14 @@ export function AccountPage() {
         <div>
           <h1>Account</h1>
           <p className="muted">
-            Signed in as <strong>{user!.username}</strong> since {formatDate(user!.createdAt)}.{' '}
+            Signed in as <strong>{user!.username}</strong>
+            {user!.email ? (
+              <>
+                {' '}
+                (<span>{user!.email}</span>)
+              </>
+            ) : null}{' '}
+            since {formatDate(user!.createdAt)}.{' '}
             <Link to={`/u/${user!.username}`}>View your public profile</Link>
           </p>
         </div>

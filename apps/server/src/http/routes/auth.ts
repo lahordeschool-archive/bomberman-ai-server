@@ -45,12 +45,15 @@ export function registerAuthRoutes(app: FastifyInstance, context: AppContext): v
       userAgent: request.headers['user-agent'],
     });
     setSessionCookie(reply, context, session.token, session.expiresAt);
-    return { user: toPublicUser(user), csrfToken: session.csrfToken };
+    return { user: toPublicUser(user, { includeEmail: true }), csrfToken: session.csrfToken };
   }
 
   app.get('/api/auth/session', async (request): Promise<SessionResponse> => {
     if (!request.session) return { user: null, csrfToken: null };
-    return { user: toPublicUser(request.session.user), csrfToken: request.session.csrfToken };
+    return {
+      user: toPublicUser(request.session.user, { includeEmail: true }),
+      csrfToken: request.session.csrfToken,
+    };
   });
 
   app.post(
@@ -66,10 +69,15 @@ export function registerAuthRoutes(app: FastifyInstance, context: AppContext): v
         user = await createUser(db, {
           username: body.username,
           displayName: body.displayName ?? body.username,
+          email: body.email,
           passwordHash: await hashPassword(body.password),
         });
       } catch (error) {
         if (isUniqueViolation(error)) {
+          const hint = `${(error as { constraint?: string }).constraint ?? ''} ${(error as { detail?: string }).detail ?? ''}`;
+          if (hint.includes('email')) {
+            throw new HttpError(409, 'email_taken', 'That email is already registered.');
+          }
           throw new HttpError(409, 'username_taken', 'That username is not available.');
         }
         throw error;

@@ -868,13 +868,16 @@ a.match-row:hover {
 }
 .arena-canvas {
   width: 100%;
+  /* Fallback until the renderer sets the live board aspect ratio inline. */
   aspect-ratio: 240 / 208;
   background: #000000;
   border-radius: var(--radius-2xl);
   overflow: hidden;
+  /* Height comes from aspect-ratio only — never stretch with the grid/flex parent. */
+  height: auto;
+  max-height: none;
 }
-/* Phaser sizes the canvas from this box, border included, and refits every half
-   second: a border or an auto-sized grid column grows the arena a little each time. */
+/* Outline (not border) so Phaser's parent box matches the visible frame. */
 .demo-arena .arena-canvas {
   outline: 1px solid var(--surface-3);
   outline-offset: -1px;

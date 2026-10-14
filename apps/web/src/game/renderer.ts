@@ -472,13 +472,20 @@ class ArenaScene extends Phaser.Scene {
 export class ArenaRenderer {
   private readonly game: Phaser.Game;
   private readonly parent: HTMLElement;
+  private readonly resizeObserver: ResizeObserver;
   private scene: ArenaScene | null = null;
   private pending: { snapshot: Snapshot; instant: boolean } | null = null;
   private muted = true;
   private highlighted: readonly number[] = [];
+  private fitFrame = 0;
 
   constructor(parent: HTMLElement) {
     this.parent = parent;
+    // Keep the box sized by CSS aspect-ratio only — Phaser's default expandParent
+    // can pin height: 100% when the node is still 0×0, which leaves letterboxing
+    // (and overflow:hidden cropping) once the board width changes.
+    parent.style.aspectRatio = `${WIDTH} / ${HEIGHT}`;
+    parent.style.removeProperty('height');
     const scene = new ArenaScene();
     this.game = new Phaser.Game({
       type: Phaser.AUTO,
@@ -488,9 +495,19 @@ export class ArenaRenderer {
       pixelArt: true,
       backgroundColor: '#000000',
       banner: false,
-      scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+      scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        expandParent: false,
+      },
       scene,
     });
+    this.resizeObserver = new ResizeObserver((entries) => {
+      const size = entries[0]?.contentRect;
+      if (!size || size.width <= 0 || size.height <= 0) return;
+      this.game.scale.refresh();
+    });
+    this.resizeObserver.observe(parent);
     this.game.events.once(Phaser.Core.Events.READY, () => {
       this.scene = scene;
       scene.muted = this.muted;
@@ -499,6 +516,7 @@ export class ArenaRenderer {
         scene.apply(this.pending.snapshot, this.pending.instant);
         this.pending = null;
       }
+      this.fitToParent();
     });
   }
 
@@ -506,11 +524,22 @@ export class ArenaRenderer {
     const width = snapshot.width * TILE_SIZE;
     const height = snapshot.height * TILE_SIZE;
     this.parent.style.aspectRatio = `${width} / ${height}`;
+    this.parent.style.removeProperty('height');
     if (this.game.scale.gameSize.width !== width || this.game.scale.gameSize.height !== height) {
-      this.game.scale.resize(width, height);
+      // setGameSize (not resize) keeps FIT mode in sync with the new board aspect.
+      this.game.scale.setGameSize(width, height);
     }
+    this.fitToParent();
     if (this.scene) this.scene.apply(snapshot, instant);
     else this.pending = { snapshot, instant };
+  }
+
+  /** Remeasure the parent after CSS aspect-ratio has been applied this frame. */
+  private fitToParent(): void {
+    cancelAnimationFrame(this.fitFrame);
+    this.fitFrame = requestAnimationFrame(() => {
+      this.game.scale.refresh();
+    });
   }
 
   reset(snapshot?: Snapshot): void {
@@ -534,6 +563,8 @@ export class ArenaRenderer {
   }
 
   destroy(): void {
+    cancelAnimationFrame(this.fitFrame);
+    this.resizeObserver.disconnect();
     this.scene = null;
     this.pending = null;
     // Blur and focus would otherwise suspend or resume the AudioContext after it is closed.

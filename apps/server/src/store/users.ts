@@ -6,17 +6,19 @@ export interface UserRow {
   id: string;
   username: string;
   display_name: string;
+  email: string | null;
   password_hash: string;
   is_house: boolean;
   role: UserRole;
   created_at: Date;
 }
 
-export function toPublicUser(row: UserRow): PublicUser {
+export function toPublicUser(row: UserRow, options?: { includeEmail?: boolean }): PublicUser {
   return {
     id: row.id,
     username: row.username,
     displayName: row.display_name,
+    ...(options?.includeEmail ? { email: row.email } : {}),
     createdAt: iso(row.created_at),
     role: row.role,
   };
@@ -24,12 +26,18 @@ export function toPublicUser(row: UserRow): PublicUser {
 
 export async function createUser(
   db: Queryable,
-  input: { username: string; displayName: string; passwordHash: string; isHouse?: boolean },
+  input: {
+    username: string;
+    displayName: string;
+    email: string;
+    passwordHash: string;
+    isHouse?: boolean;
+  },
 ): Promise<UserRow> {
   const { rows } = await db.query<UserRow>(
-    `insert into users (username, display_name, password_hash, is_house)
-     values ($1, $2, $3, $4) returning *`,
-    [input.username, input.displayName, input.passwordHash, input.isHouse ?? false],
+    `insert into users (username, display_name, email, password_hash, is_house)
+     values ($1, $2, $3, $4, $5) returning *`,
+    [input.username, input.displayName, input.email, input.passwordHash, input.isHouse ?? false],
   );
   return rows[0]!;
 }

@@ -27,10 +27,12 @@ describe('auth', () => {
 
     const user = await client.register('Ada_Lovelace');
     expect(user.username).toBe('ada_lovelace');
+    expect(user.email).toBe('ada_lovelace@example.test');
     expect(client.cookie).toMatch(/^bomber_session=/);
 
     const session = await client.request('GET', '/api/auth/session');
     expect(session.body.user.username).toBe('ada_lovelace');
+    expect(session.body.user.email).toBe('ada_lovelace@example.test');
     expect(session.body.csrfToken).toBe(client.csrf);
 
     expect((await client.request('POST', '/api/auth/logout')).status).toBe(204);
@@ -48,6 +50,7 @@ describe('auth', () => {
     const client = new TestClient(app);
     const response = await client.request('POST', '/api/auth/register', {
       username: 'hash_check',
+      email: 'hash_check@example.test',
       password: 'a long enough password',
     });
     expect(JSON.stringify(response.body)).not.toContain('argon2');
@@ -74,25 +77,40 @@ describe('auth', () => {
     expect(wrong.body.message).toBe(unknown.body.message);
   });
 
-  it('rejects duplicate and reserved usernames and weak passwords', async () => {
+  it('rejects duplicate and reserved usernames, duplicate emails, and weak passwords', async () => {
     const client = new TestClient(app);
     await client.register('linus');
     const again = await new TestClient(app).request('POST', '/api/auth/register', {
       username: 'LINUS',
+      email: 'linus2@example.test',
       password: 'whatever password',
     });
     expect(again.status).toBe(409);
+    const emailTaken = await new TestClient(app).request('POST', '/api/auth/register', {
+      username: 'linus_alt',
+      email: 'LINUS@example.test',
+      password: 'whatever password',
+    });
+    expect(emailTaken.status).toBe(409);
+    expect(emailTaken.body.error).toBe('email_taken');
     const house = await new TestClient(app).request('POST', '/api/auth/register', {
       username: 'house',
+      email: 'house@example.test',
       password: 'whatever password',
     });
     expect(house.status).toBe(409);
     const weak = await new TestClient(app).request('POST', '/api/auth/register', {
       username: 'weakling',
+      email: 'weakling@example.test',
       password: 'short',
     });
     expect(weak.status).toBe(400);
     expect(weak.body.issues[0].path).toBe('password');
+    const missingEmail = await new TestClient(app).request('POST', '/api/auth/register', {
+      username: 'no_email',
+      password: 'whatever password',
+    });
+    expect(missingEmail.status).toBe(400);
   });
 
   it('cannot log in as the house account', async () => {

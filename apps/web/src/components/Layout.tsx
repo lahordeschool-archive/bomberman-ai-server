@@ -75,7 +75,13 @@ export function Layout({ children }: { children: ReactNode }) {
         {children}
       </main>
       <footer className="footer">
-        <span>Bomber Arena. Sprites from the original workshop project.</span>
+        <span>
+          Bomber Arena — pedagogical project of{' '}
+          <a href="http://lahorde.tech/" target="_blank" rel="noreferrer">
+            La Horde
+          </a>
+          . Sprites from the original workshop project.
+        </span>
         <span>
           <a href="https://github.com/lahordeschool/bomberman-ai-server">Source</a>
           <Link to="/matches">Live matches</Link>

@@ -23,9 +23,21 @@ export const displayNameSchema = z
   .transform((value) => value.normalize('NFKC').trim().replace(/\s+/g, ' '))
   .pipe(z.string().min(1).max(32));
 
+export const emailSchema = z
+  .string()
+  .transform((value) => value.normalize('NFKC').trim().toLowerCase())
+  .pipe(
+    z
+      .string()
+      .min(3, 'Enter a valid email address')
+      .max(254, 'Enter a valid email address')
+      .email('Enter a valid email address'),
+  );
+
 export const registerBody = z.object({
   username: usernameSchema,
   password: passwordSchema,
+  email: emailSchema,
   displayName: displayNameSchema.optional(),
 });
 
@@ -88,6 +100,8 @@ export interface PublicUser {
   id: string;
   username: string;
   displayName: string;
+  /** Present on session/admin responses; omitted from public profiles. */
+  email?: string | null;
   createdAt: string;
   role: UserRole;
 }
