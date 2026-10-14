@@ -329,57 +329,62 @@ export default function MatchPage({ matchId }: { matchId: string }) {
           {summary && summary.status === 'completed' ? (
             <Card>
               <h2>Result</h2>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Place</th>
-                    <th>Bot</th>
-                    <th>Kills</th>
-                    <th>Score</th>
-                    <th>Rating</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...summary.participants]
-                    .sort((a, b) => (a.placement ?? 9) - (b.placement ?? 9))
-                    .map((participant) => {
-                      const delta =
-                        participant.ratingAfter !== null && participant.ratingBefore !== null
-                          ? Math.round(participant.ratingAfter - participant.ratingBefore)
-                          : null;
-                      return (
-                        <tr key={participant.slot}>
-                          <td className="mono">#{participant.placement}</td>
-                          <td>
-                            {participant.botId ? (
-                              <Link to={`/bots/${participant.botId}`}>{participant.botName}</Link>
-                            ) : (
-                              participant.botName
-                            )}
-                            {participant.owner ? (
-                              <small className="muted">
-                                {' '}
-                                <Link to={`/u/${participant.owner.username}`}>
-                                  {participant.owner.displayName}
-                                </Link>
+              <div className="table-scroll" tabIndex={0} aria-label="Match result">
+                <table className="table match-result">
+                  <thead>
+                    <tr>
+                      <th>Place</th>
+                      <th>Bot</th>
+                      <th>Kills</th>
+                      <th>Score</th>
+                      <th>Rating</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...summary.participants]
+                      .sort((a, b) => (a.placement ?? 9) - (b.placement ?? 9))
+                      .map((participant) => {
+                        const delta =
+                          participant.ratingAfter !== null && participant.ratingBefore !== null
+                            ? Math.round(participant.ratingAfter - participant.ratingBefore)
+                            : null;
+                        return (
+                          <tr key={participant.slot}>
+                            <td className="mono">#{participant.placement}</td>
+                            <td>
+                              {participant.botId ? (
+                                <Link to={`/bots/${participant.botId}`}>{participant.botName}</Link>
+                              ) : (
+                                participant.botName
+                              )}
+                              {participant.owner ? (
+                                <small className="muted">
+                                  {' '}
+                                  <Link to={`/u/${participant.owner.username}`}>
+                                    {participant.owner.displayName}
+                                  </Link>
+                                </small>
+                              ) : null}
+                              <small className="mobile-table-meta">
+                                {participant.kills} kills · {participant.score} score
                               </small>
-                            ) : null}
-                          </td>
-                          <td className="mono">{participant.kills}</td>
-                          <td className="mono">{participant.score}</td>
-                          <td className="mono">
-                            {formatRating(participant.ratingAfter)}{' '}
-                            {delta !== null ? (
-                              <span className={`delta ${delta >= 0 ? 'up' : 'down'}`}>
-                                {delta >= 0 ? `+${delta}` : delta}
-                              </span>
-                            ) : null}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
+                            </td>
+                            <td className="mono">{participant.kills}</td>
+                            <td className="mono">{participant.score}</td>
+                            <td className="mono">
+                              {formatRating(participant.ratingAfter)}{' '}
+                              {delta !== null ? (
+                                <span className={`delta ${delta >= 0 ? 'up' : 'down'}`}>
+                                  {delta >= 0 ? `+${delta}` : delta}
+                                </span>
+                              ) : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
             </Card>
           ) : null}
         </div>
