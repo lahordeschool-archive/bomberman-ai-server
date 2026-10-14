@@ -25,6 +25,7 @@ export interface Snapshot {
   status: GameState['status'];
   width: number;
   height: number;
+  theme: GameState['theme'];
   /** One digit per cell, row-major. */
   grid: string;
   players: SnapshotPlayer[];
@@ -41,6 +42,7 @@ export function toSnapshot(state: GameState, events: GameEvent[] = state.events)
     status: state.status,
     width: state.width,
     height: state.height,
+    theme: state.theme,
     grid: state.grid.join(''),
     players: state.players.map((player) => {
       const move = player.move;

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyIntent,
+  ARENA_THEMES,
+  ARENA_WIDTHS,
   BOMB_FUSE_TICKS,
   Cell,
   cellIndex,
@@ -123,8 +125,8 @@ describe('bombs and flames', () => {
     expect(state.bombs).toHaveLength(0);
     const flameCells = state.flames.map((flame) => `${flame.x},${flame.y}`).sort();
     expect(flameCells).toEqual(['1,1', '1,2', '1,3', '1,4', '1,5', '1,6', '2,3'].sort());
-    expect(state.grid[cellIndex(3, 3)]).toBe(Cell.Floor);
-    expect(state.grid[cellIndex(4, 3)]).toBe(Cell.Soft);
+    expect(state.grid[cellIndex(3, 3, state.width)]).toBe(Cell.Floor);
+    expect(state.grid[cellIndex(4, 3, state.width)]).toBe(Cell.Soft);
     expect(state.items[0]!.hidden).toBe(false);
     expect(state.players[0]!.stats.wallsDestroyed).toBe(1);
     expect(state.flames.find((flame) => flame.x === 1 && flame.y === 6)!.kind).toBe('endDown');
@@ -229,7 +231,7 @@ describe('items', () => {
     const visible = state.items.filter((item) => !item.hidden).map((item) => item.type);
     expect(visible.sort()).toEqual(['extraBomb', 'speedUp']);
     for (const item of state.items) {
-      expect(state.grid[cellIndex(item.x, item.y)]).toBe(Cell.Floor);
+      expect(state.grid[cellIndex(item.x, item.y, state.width)]).toBe(Cell.Floor);
     }
   });
 });
@@ -295,9 +297,41 @@ describe('timeouts and scoring', () => {
     step(state);
     step(state);
     const snapshot = toSnapshot(state);
-    expect(snapshot.grid).toHaveLength(15 * 13);
+    expect(snapshot.grid).toHaveLength(snapshot.width * snapshot.height);
     expect(snapshot.players[0]!.px).toBeGreaterThan(1);
     expect(snapshot.players[0]!.px).toBeLessThan(2);
     expect(snapshot.items.length).toBe(state.items.filter((item) => !item.hidden).length);
+  });
+});
+
+describe('arena variations', () => {
+  it('selects a deterministic odd width and scene from the match seed', () => {
+    const seenWidths = new Set<number>();
+    const seenThemes = new Set<string>();
+    for (let seed = 0; seed < 100; seed++) {
+      const first = createGame({ seed, playerCount: 4 });
+      const second = createGame({ seed, playerCount: 4 });
+      expect(second).toMatchObject({
+        width: first.width,
+        height: first.height,
+        theme: first.theme,
+        grid: first.grid,
+      });
+      expect(ARENA_WIDTHS).toContain(first.width);
+      expect(ARENA_THEMES).toContain(first.theme);
+      expect(first.grid).toHaveLength(first.width * first.height);
+      for (const player of first.players) {
+        expect(first.grid[cellIndex(player.x, player.y, first.width)]).toBe(Cell.Floor);
+      }
+      seenWidths.add(first.width);
+      seenThemes.add(first.theme);
+    }
+    expect([...seenWidths].sort((a, b) => a - b)).toEqual([...ARENA_WIDTHS]);
+    expect([...seenThemes].sort()).toEqual([...ARENA_THEMES].sort());
+  });
+
+  it('keeps legacy replay arenas fixed to the original grass stage', () => {
+    const state = createGame({ seed: 42, playerCount: 2, engineVersion: 4 });
+    expect(state).toMatchObject({ width: 15, height: 13, theme: 'grass' });
   });
 });

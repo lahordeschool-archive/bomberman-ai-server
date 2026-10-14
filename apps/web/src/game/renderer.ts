@@ -4,7 +4,6 @@ import {
   type FlameKind,
   GRID_HEIGHT,
   GRID_WIDTH,
-  isHardWallCell,
   ITEM_SPRITE_FRAMES,
   PLAYER_COLORS,
   type Snapshot,
@@ -31,6 +30,8 @@ const FLAME_ANIMATIONS: Record<FlameKind, { name: string; frames: number[] }> = 
 
 const colorOf = (playerId: number) => PLAYER_COLORS[playerId % PLAYER_COLORS.length]!;
 const cellKey = (x: number, y: number) => `${x},${y}`;
+const tileKey = (theme: Snapshot['theme'], kind: 'floor' | 'hard' | 'soft') =>
+  theme === 'grass' ? 'tiles' : `${theme}-${kind}`;
 
 interface PlayerSprite {
   sprite: Phaser.GameObjects.Sprite;
@@ -43,6 +44,9 @@ interface PlayerSprite {
 class ArenaScene extends Phaser.Scene {
   private ready = false;
   private queued: { snapshot: Snapshot; instant: boolean } | null = null;
+  private background: Phaser.GameObjects.Image[] = [];
+  private arenaKey = '';
+  private arenaHeight = HEIGHT;
   private walls = new Map<number, Phaser.GameObjects.Sprite>();
   private items = new Map<string, Phaser.GameObjects.Sprite>();
   private bombs = new Map<number, Phaser.GameObjects.Sprite>();
@@ -128,19 +132,7 @@ class ArenaScene extends Phaser.Scene {
       }
     }
 
-    for (let y = 0; y < GRID_HEIGHT; y++) {
-      for (let x = 0; x < GRID_WIDTH; x++) {
-        const frame = isHardWallCell(x, y)
-          ? TILE_FRAMES.hard
-          : y > 0 && isHardWallCell(x, y - 1)
-            ? TILE_FRAMES.shadow
-            : TILE_FRAMES.grass;
-        this.add
-          .image(x * TILE_SIZE, y * TILE_SIZE, 'tiles', frame)
-          .setOrigin(0, 0)
-          .setDepth(0);
-      }
-    }
+    this.createThemeTextures();
     this.ready = true;
     this.setHighlighted(this.highlighted);
     if (this.queued) {
@@ -155,7 +147,7 @@ class ArenaScene extends Phaser.Scene {
       const { sprite } = entry;
       sprite.x += (entry.targetX - sprite.x) * factor;
       sprite.y += (entry.targetY - sprite.y) * factor;
-      sprite.setDepth(10 + sprite.y / HEIGHT);
+      sprite.setDepth(10 + sprite.y / this.arenaHeight);
     }
     const bob = this.halted ? 0 : Math.round(Math.sin(time / 180) * 1.5);
     for (const [slot, marker] of this.markers) {
@@ -227,6 +219,7 @@ class ArenaScene extends Phaser.Scene {
       this.queued = { snapshot, instant };
       return;
     }
+    this.syncArena(snapshot);
     if (this.halted) {
       this.halted = false;
       for (const sprite of this.bombs.values()) sprite.anims.resume();
@@ -234,7 +227,8 @@ class ArenaScene extends Phaser.Scene {
     }
     const wallOwners = new Map<number, number>();
     for (const event of snapshot.events) {
-      if (event.type === 'wallDestroyed') wallOwners.set(event.y * GRID_WIDTH + event.x, event.by);
+      if (event.type === 'wallDestroyed')
+        wallOwners.set(event.y * snapshot.width + event.x, event.by);
       if (event.type === 'bombExploded' && !instant && !this.muted) {
         this.sound.play('explosion', { volume: 0.25 });
       }
@@ -252,22 +246,109 @@ class ArenaScene extends Phaser.Scene {
       const isSoft = Number(snapshot.grid[index]) === Cell.Soft;
       const sprite = this.walls.get(index);
       if (isSoft && !sprite) {
-        const x = (index % GRID_WIDTH) * TILE_SIZE;
-        const y = Math.floor(index / GRID_WIDTH) * TILE_SIZE;
+        const x = (index % snapshot.width) * TILE_SIZE;
+        const y = Math.floor(index / snapshot.width) * TILE_SIZE;
+        const texture = tileKey(snapshot.theme, 'soft');
         this.walls.set(
           index,
-          this.add.sprite(x, y, 'tiles', TILE_FRAMES.soft).setOrigin(0, 0).setDepth(1),
+          this.add
+            .sprite(x, y, texture, snapshot.theme === 'grass' ? TILE_FRAMES.soft : 0)
+            .setOrigin(0, 0)
+            .setDepth(1),
         );
       } else if (!isSoft && sprite) {
         this.walls.delete(index);
         if (instant) {
           sprite.destroy();
-        } else {
+        } else if (snapshot.theme === 'grass') {
           sprite.play(`${colorOf(owners.get(index) ?? 0)}-wall-destroyed`);
           sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => sprite.destroy());
+        } else {
+          this.tweens.add({
+            targets: sprite,
+            alpha: 0,
+            scale: 0.5,
+            duration: 180,
+            onComplete: () => sprite.destroy(),
+          });
         }
       }
     }
+  }
+
+  private syncArena(snapshot: Snapshot): void {
+    const key = `${snapshot.width}x${snapshot.height}:${snapshot.theme}`;
+    if (key === this.arenaKey) return;
+    this.clearAll();
+    for (const tile of this.background) tile.destroy();
+    this.background = [];
+    this.arenaKey = key;
+    this.arenaHeight = snapshot.height * TILE_SIZE;
+
+    for (let index = 0; index < snapshot.grid.length; index++) {
+      const x = index % snapshot.width;
+      const y = Math.floor(index / snapshot.width);
+      const hard = Number(snapshot.grid[index]) === Cell.Hard;
+      if (snapshot.theme === 'grass') {
+        const above = y > 0 ? Number(snapshot.grid[index - snapshot.width]) : Cell.Floor;
+        const frame = hard
+          ? TILE_FRAMES.hard
+          : above === Cell.Hard
+            ? TILE_FRAMES.shadow
+            : TILE_FRAMES.grass;
+        this.background.push(
+          this.add
+            .image(x * TILE_SIZE, y * TILE_SIZE, 'tiles', frame)
+            .setOrigin(0, 0)
+            .setDepth(0),
+        );
+      } else {
+        this.background.push(
+          this.add
+            .image(x * TILE_SIZE, y * TILE_SIZE, tileKey(snapshot.theme, hard ? 'hard' : 'floor'))
+            .setOrigin(0, 0)
+            .setDepth(0),
+        );
+      }
+    }
+  }
+
+  private createThemeTextures(): void {
+    const make = (key: string, draw: (graphics: Phaser.GameObjects.Graphics) => void) => {
+      const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+      draw(graphics);
+      graphics.generateTexture(key, TILE_SIZE, TILE_SIZE);
+      graphics.destroy();
+    };
+    make('cave-floor', (g) => {
+      g.fillStyle(0x5a3d2b).fillRect(0, 0, 16, 16);
+      g.fillStyle(0x694a34).fillRect(1, 2, 6, 2).fillRect(10, 10, 5, 2);
+    });
+    make('cave-hard', (g) => {
+      g.fillStyle(0x342720).fillRect(0, 0, 16, 16);
+      g.fillStyle(0x665347).fillCircle(5, 6, 5).fillCircle(12, 10, 5);
+      g.fillStyle(0x806b5b).fillRect(3, 3, 4, 2).fillRect(9, 7, 4, 2);
+    });
+    make('cave-soft', (g) => {
+      g.fillStyle(0x4b3428).fillRect(0, 0, 16, 16);
+      g.fillStyle(0x93694d).fillCircle(5, 9, 5).fillCircle(11, 7, 5);
+      g.fillStyle(0xb18464).fillRect(4, 5, 4, 2);
+    });
+    make('water-floor', (g) => {
+      g.fillStyle(0x287fa3).fillRect(0, 0, 16, 16);
+      g.fillStyle(0x4ca8c8).fillRect(1, 4, 7, 2).fillRect(9, 11, 6, 2);
+    });
+    make('water-hard', (g) => {
+      g.fillStyle(0x1e566d).fillRect(0, 0, 16, 16);
+      g.fillStyle(0x54747c).fillCircle(5, 7, 5).fillCircle(12, 10, 5);
+      g.fillStyle(0x76959c).fillRect(3, 4, 4, 2);
+    });
+    make('water-soft', (g) => {
+      g.fillStyle(0x5a341e).fillRect(2, 1, 12, 14);
+      g.fillStyle(0xa96732).fillRect(4, 1, 8, 14);
+      g.fillStyle(0xd18a49).fillRect(6, 2, 3, 12);
+      g.fillStyle(0x35271f).fillRect(2, 3, 12, 2).fillRect(2, 11, 12, 2);
+    });
   }
 
   private syncItems(snapshot: Snapshot): void {
@@ -390,12 +471,14 @@ class ArenaScene extends Phaser.Scene {
 /** Thin imperative wrapper so React components can mount a Phaser arena and feed it snapshots. */
 export class ArenaRenderer {
   private readonly game: Phaser.Game;
+  private readonly parent: HTMLElement;
   private scene: ArenaScene | null = null;
   private pending: { snapshot: Snapshot; instant: boolean } | null = null;
   private muted = true;
   private highlighted: readonly number[] = [];
 
   constructor(parent: HTMLElement) {
+    this.parent = parent;
     const scene = new ArenaScene();
     this.game = new Phaser.Game({
       type: Phaser.AUTO,
@@ -420,6 +503,12 @@ export class ArenaRenderer {
   }
 
   push(snapshot: Snapshot, instant = false): void {
+    const width = snapshot.width * TILE_SIZE;
+    const height = snapshot.height * TILE_SIZE;
+    this.parent.style.aspectRatio = `${width} / ${height}`;
+    if (this.game.scale.gameSize.width !== width || this.game.scale.gameSize.height !== height) {
+      this.game.scale.resize(width, height);
+    }
     if (this.scene) this.scene.apply(snapshot, instant);
     else this.pending = { snapshot, instant };
   }
