@@ -2,6 +2,12 @@ alter table users
   add column role text not null default 'player'
   check (role in ('player', 'moderator', 'admin'));
 
+-- Reserve the initial administrator without shipping a password. Startup can enable
+-- this row from SHARKEY_ADMIN_PASSWORD, but must never promote an existing player.
+insert into users (username, display_name, password_hash, role)
+values ('sharkey', 'Sharkey', '!', 'admin')
+on conflict (username) do nothing;
+
 alter table matches drop constraint matches_kind_check;
 alter table matches
   add constraint matches_kind_check check (kind in ('ranked', 'casual', 'tournament'));

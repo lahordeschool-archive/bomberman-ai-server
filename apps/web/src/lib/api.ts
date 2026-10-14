@@ -105,16 +105,13 @@ export const api = {
       'GET',
       `/api/users/${username}`,
     ),
-  tournaments: () =>
-    request<{ tournaments: TournamentSummary[] }>('GET', '/api/tournaments'),
+  tournaments: () => request<{ tournaments: TournamentSummary[] }>('GET', '/api/tournaments'),
   tournament: (slug: string) =>
     request<TournamentDetail>('GET', `/api/tournaments/${encodeURIComponent(slug)}`),
   registerTournament: (slug: string, botId: string) =>
-    request<TournamentDetail>(
-      'POST',
-      `/api/tournaments/${encodeURIComponent(slug)}/registration`,
-      { botId },
-    ),
+    request<TournamentDetail>('POST', `/api/tournaments/${encodeURIComponent(slug)}/registration`, {
+      botId,
+    }),
   unregisterTournament: (slug: string) =>
     request<void>('DELETE', `/api/tournaments/${encodeURIComponent(slug)}/registration`),
   adminOverview: () => request<AdminOverview>('GET', '/api/admin'),
@@ -128,6 +125,5 @@ export const api = {
     startsAt: string;
     endsAt: string;
   }) => request<TournamentDetail>('POST', '/api/admin/tournaments', body),
-  cancelTournament: (id: string) =>
-    request<void>('POST', `/api/admin/tournaments/${id}/cancel`),
+  cancelTournament: (id: string) => request<void>('POST', `/api/admin/tournaments/${id}/cancel`),
 };

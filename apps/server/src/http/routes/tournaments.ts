@@ -1,12 +1,10 @@
-import {
-  tournamentRegistrationBody,
-  tournamentSlugParam,
-} from '@bomberman/protocol';
+import { tournamentRegistrationBody, tournamentSlugParam } from '@bomberman/protocol';
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '../../context.ts';
 import { getBot } from '../../store/bots.ts';
 import {
   getTournament,
+  getUserTournamentBotId,
   listTournaments,
   registerForTournament,
   unregisterFromTournament,
@@ -38,11 +36,30 @@ export function registerTournamentRoutes(app: FastifyInstance, context: AppConte
     if (!bot.activeVersion) {
       throw new HttpError(409, 'no_version', 'Save a bot version before registering.');
     }
-    if (tournament.state === 'finished' || tournament.state === 'cancelled') {
-      throw new HttpError(409, 'tournament_closed', 'Registration is closed.');
-    }
     await db.transaction(async (tx) => {
-      await unregisterFromTournament(tx, tournament.id, session.user.id);
+      const locked = await tx.query<{
+        starts_at: Date;
+        ends_at: Date;
+        cancelled_at: Date | null;
+      }>(`select starts_at, ends_at, cancelled_at from tournaments where id = $1 for update`, [
+        tournament.id,
+      ]);
+      const row = locked.rows[0]!;
+      const now = Date.now();
+      const active =
+        new Date(row.starts_at).getTime() <= now && new Date(row.ends_at).getTime() > now;
+      if (row.cancelled_at || new Date(row.ends_at).getTime() <= now) {
+        throw new HttpError(409, 'tournament_closed', 'Registration is closed.');
+      }
+      const registeredBotId = await getUserTournamentBotId(tx, tournament.id, session.user.id);
+      if (registeredBotId && registeredBotId !== bot.id && active) {
+        throw new HttpError(
+          409,
+          'entry_locked',
+          'The participating bot cannot be changed after the tournament starts.',
+        );
+      }
+      if (!active) await unregisterFromTournament(tx, tournament.id, session.user.id);
       await registerForTournament(tx, tournament.id, bot.id, session.user.id);
     });
     await recordAudit(db, {

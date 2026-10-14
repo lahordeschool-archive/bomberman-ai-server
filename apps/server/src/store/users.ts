@@ -55,11 +55,7 @@ export async function updatePasswordHash(
   ]);
 }
 
-export async function updateUserRole(
-  db: Queryable,
-  userId: string,
-  role: UserRole,
-): Promise<void> {
+export async function updateUserRole(db: Queryable, userId: string, role: UserRole): Promise<void> {
   await db.query('update users set role = $2 where id = $1 and not is_house', [userId, role]);
 }
 

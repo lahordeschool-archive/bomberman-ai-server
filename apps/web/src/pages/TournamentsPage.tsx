@@ -22,7 +22,9 @@ export function TournamentsPage() {
       <header className="page-header">
         <div>
           <h1>Tournaments</h1>
-          <p className="muted">Improve your bot throughout each event. Every match uses its latest version.</p>
+          <p className="muted">
+            Improve your bot throughout each event. Every match uses its latest version.
+          </p>
         </div>
       </header>
       <ErrorMessage>{error}</ErrorMessage>

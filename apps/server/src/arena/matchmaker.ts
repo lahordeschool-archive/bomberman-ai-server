@@ -83,7 +83,8 @@ export class Matchmaker {
     const started: string[] = [];
     while (
       !this.stopped &&
-      this.arena.size < this.context.config.rankedConcurrency
+      this.arena.runningCount('ranked') + this.arena.runningCount('tournament') <
+        this.context.config.rankedConcurrency
     ) {
       const busy = this.arena.busyBotIds();
       const tournamentQueue = (await activeTournamentQueue(this.context.db)).filter(

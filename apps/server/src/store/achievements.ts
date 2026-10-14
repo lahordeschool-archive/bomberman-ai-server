@@ -2,14 +2,11 @@ import type { Achievement } from '@bomberman/protocol';
 import type { Queryable } from '../db/database.ts';
 import { iso } from '../db/rows.ts';
 
-export async function awardMatchAchievements(
-  db: Queryable,
-  userIds: string[],
-): Promise<void> {
+export async function awardMatchAchievements(db: Queryable, userIds: string[]): Promise<void> {
   for (const userId of new Set(userIds)) {
     const { rows } = await db.query<{ games: number; wins: number; kills: number }>(
-      `select count(*)::int as games,
-              count(*) filter (where p.placement = 1)::int as wins,
+      `select count(distinct p.match_id)::int as games,
+              count(*) filter (where p.slot = m.winner_slot)::int as wins,
               coalesce(sum(p.kills), 0)::int as kills
        from match_participants p
        join matches m on m.id = p.match_id
@@ -33,10 +30,7 @@ export async function awardMatchAchievements(
   }
 }
 
-export async function listUserAchievements(
-  db: Queryable,
-  userId: string,
-): Promise<Achievement[]> {
+export async function listUserAchievements(db: Queryable, userId: string): Promise<Achievement[]> {
   const { rows } = await db.query<{
     slug: string;
     title: string;

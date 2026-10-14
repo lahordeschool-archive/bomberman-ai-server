@@ -141,7 +141,12 @@ export async function completeMatch(
           `update tournament_registrations
            set games = games + 1, wins = wins + $3, points = points + $4
            where tournament_id = $1 and bot_id = $2`,
-          [tournamentId, botId, player.placement === 1 ? 1 : 0, result.players.length - player.placement],
+          [
+            tournamentId,
+            botId,
+            player.playerId === result.winnerId ? 1 : 0,
+            result.players.length - player.placement,
+          ],
         );
       }
     }
@@ -150,7 +155,10 @@ export async function completeMatch(
     'select distinct user_id from match_participants where match_id = $1 and user_id is not null',
     [id],
   );
-  await awardMatchAchievements(tx, users.rows.map((row) => row.user_id));
+  await awardMatchAchievements(
+    tx,
+    users.rows.map((row) => row.user_id),
+  );
 }
 
 /** Updates ratings for one completed ranked match from its stored placements. */

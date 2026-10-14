@@ -1,8 +1,4 @@
-import type {
-  TournamentDetail,
-  TournamentStanding,
-  TournamentSummary,
-} from '@bomberman/protocol';
+import type { TournamentDetail, TournamentStanding, TournamentSummary } from '@bomberman/protocol';
 import type { Queryable } from '../db/database.ts';
 import { iso } from '../db/rows.ts';
 
@@ -46,10 +42,7 @@ export async function listTournaments(db: Queryable): Promise<TournamentSummary[
   return rows.map(summary);
 }
 
-export async function getTournament(
-  db: Queryable,
-  slug: string,
-): Promise<TournamentDetail | null> {
+export async function getTournament(db: Queryable, slug: string): Promise<TournamentDetail | null> {
   const result = await db.query<TournamentRow>(`${SELECT} where t.slug = $1`, [slug]);
   const tournament = result.rows[0];
   if (!tournament) return null;
@@ -75,18 +68,16 @@ export async function getTournament(
   );
   return {
     ...summary(tournament),
-    standings: standings.rows.map(
-      (row, index): TournamentStanding => ({
-        rank: index + 1,
-        botId: row.bot_id,
-        botName: row.bot_name,
-        owner: { username: row.username, displayName: row.display_name },
-        games: row.games,
-        wins: row.wins,
-        points: row.points,
-        activeVersion: row.active_version,
-      }),
-    ),
+    standings: standings.rows.map((row, index): TournamentStanding => ({
+      rank: index + 1,
+      botId: row.bot_id,
+      botName: row.bot_name,
+      owner: { username: row.username, displayName: row.display_name },
+      games: row.games,
+      wins: row.wins,
+      points: row.points,
+      activeVersion: row.active_version,
+    })),
   };
 }
 
@@ -126,6 +117,19 @@ export async function registerForTournament(
   );
 }
 
+export async function getUserTournamentBotId(
+  db: Queryable,
+  tournamentId: string,
+  userId: string,
+): Promise<string | null> {
+  const { rows } = await db.query<{ bot_id: string }>(
+    `select bot_id from tournament_registrations
+     where tournament_id = $1 and user_id = $2`,
+    [tournamentId, userId],
+  );
+  return rows[0]?.bot_id ?? null;
+}
+
 export async function unregisterFromTournament(
   db: Queryable,
   tournamentId: string,
@@ -148,9 +152,7 @@ export interface TournamentQueueEntry {
   lastMatchedAt: string | null;
 }
 
-export async function activeTournamentQueue(
-  db: Queryable,
-): Promise<TournamentQueueEntry[]> {
+export async function activeTournamentQueue(db: Queryable): Promise<TournamentQueueEntry[]> {
   const { rows } = await db.query<{
     tournament_id: string;
     bot_id: string;

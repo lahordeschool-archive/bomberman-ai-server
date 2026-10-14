@@ -16,8 +16,11 @@ export default function AdminPage() {
     endsAt: '',
   });
 
-  const load = () => api.adminOverview().then(setData, (failure: Error) => setError(failure.message));
-  useEffect(load, []);
+  const load = () =>
+    api.adminOverview().then(setData, (failure: Error) => setError(failure.message));
+  useEffect(() => {
+    void load();
+  }, []);
 
   if (!data && !error) return <Skeleton lines={7} />;
   return (
@@ -46,7 +49,8 @@ export default function AdminPage() {
                 {data.liveMatches.map((match) => (
                   <li key={match.id}>
                     <span>
-                      <strong>{match.kind}</strong> · {match.participants.map((p) => p.botName).join(', ')}
+                      <strong>{match.kind}</strong> ·{' '}
+                      {match.participants.map((p) => p.botName).join(', ')}
                     </span>
                     <Button
                       variant="danger"
@@ -70,7 +74,8 @@ export default function AdminPage() {
               {data.users.map((entry) => (
                 <li key={entry.id}>
                   <span>
-                    <strong>{entry.displayName}</strong> <small className="muted">@{entry.username}</small>
+                    <strong>{entry.displayName}</strong>{' '}
+                    <small className="muted">@{entry.username}</small>
                   </span>
                   <select
                     aria-label={`Role for ${entry.username}`}
@@ -100,7 +105,9 @@ export default function AdminPage() {
                     setForm((current) => ({
                       ...current,
                       name: event.target.value,
-                      slug: current.slug || event.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                      slug:
+                        current.slug ||
+                        event.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
                     }))
                   }
                 />
@@ -154,7 +161,9 @@ export default function AdminPage() {
               {data.audit.map((event) => (
                 <li key={event.id}>
                   <span className="mono">{event.action}</span>
-                  <span className="muted">{event.actor ?? 'system'} · {formatDate(event.createdAt)}</span>
+                  <span className="muted">
+                    {event.actor ?? 'system'} · {formatDate(event.createdAt)}
+                  </span>
                 </li>
               ))}
             </ul>

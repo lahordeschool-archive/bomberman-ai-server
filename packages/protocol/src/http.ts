@@ -213,7 +213,11 @@ export interface TournamentDetail extends TournamentSummary {
 export const createTournamentBody = z
   .object({
     name: z.string().trim().min(3).max(80),
-    slug: z.string().trim().toLowerCase().regex(/^[a-z0-9-]{3,48}$/),
+    slug: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(/^[a-z0-9-]{3,48}$/),
     description: z.string().trim().max(1000).default(''),
     startsAt: z.iso.datetime(),
     endsAt: z.iso.datetime(),
@@ -224,7 +228,11 @@ export const createTournamentBody = z
   });
 
 export const tournamentSlugParam = z.object({
-  slug: z.string().trim().toLowerCase().regex(/^[a-z0-9-]{3,48}$/),
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9-]{3,48}$/),
 });
 
 export const tournamentRegistrationBody = z.object({ botId: z.uuid() });

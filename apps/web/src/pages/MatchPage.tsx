@@ -260,9 +260,18 @@ export default function MatchPage({ matchId }: { matchId: string }) {
             Matches
           </Link>
           <h1>
-            {summary?.kind === 'casual' || (!summary && liveInit) ? 'Casual match' : 'Ranked match'}{' '}
+            {summary?.kind === 'tournament'
+              ? 'Tournament match'
+              : summary?.kind === 'casual' || (!summary && liveInit)
+                ? 'Casual match'
+                : 'Ranked match'}{' '}
             {isLive ? <span className="badge badge-live">Live</span> : null}
           </h1>
+          {summary?.tournament ? (
+            <p>
+              <Link to={`/tournaments/${summary.tournament.slug}`}>{summary.tournament.name}</Link>
+            </p>
+          ) : null}
           {summary ? <p className="muted">{formatDate(summary.startedAt)}</p> : null}
         </div>
         {timeline ? (

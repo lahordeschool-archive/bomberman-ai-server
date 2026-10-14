@@ -9,11 +9,7 @@ import { z } from 'zod';
 import type { AppContext } from '../../context.ts';
 import { iso } from '../../db/rows.ts';
 import { getMatchSummary, listMatches } from '../../store/matches.ts';
-import {
-  cancelTournament,
-  createTournament,
-  getTournament,
-} from '../../store/tournaments.ts';
+import { cancelTournament, createTournament, getTournament } from '../../store/tournaments.ts';
 import {
   findUserById,
   recordAudit,
@@ -39,7 +35,9 @@ export function registerAdminRoutes(app: FastifyInstance, context: AppContext): 
           (select count(*)::int from matches where status = 'running') as live_matches,
           (select count(*)::int from tournaments) as tournaments`,
       ),
-      db.query<UserRow>('select * from users where not is_house order by created_at desc limit 100'),
+      db.query<UserRow>(
+        'select * from users where not is_house order by created_at desc limit 100',
+      ),
       db.query<{
         id: string;
         actor: string | null;
@@ -80,6 +78,10 @@ export function registerAdminRoutes(app: FastifyInstance, context: AppContext): 
     if (!match) throw notFound('That match');
     if (match.status !== 'running' || !(await context.cancelMatch?.(id))) {
       throw new HttpError(409, 'match_not_running', 'That match is no longer running.');
+    }
+    const cancelled = await getMatchSummary(db, id);
+    if (cancelled?.status !== 'aborted') {
+      throw new HttpError(409, 'match_not_running', 'That match completed before cancellation.');
     }
     await recordAudit(db, {
       userId: session.user.id,

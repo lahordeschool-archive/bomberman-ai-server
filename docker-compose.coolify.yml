@@ -33,6 +33,7 @@ services:
       TRUST_PROXY: uniquelocal
       LOG_LEVEL: ${LOG_LEVEL:-info}
       RANKED_CONCURRENCY: ${RANKED_CONCURRENCY:-2}
+      SHARKEY_ADMIN_PASSWORD: ${SHARKEY_ADMIN_PASSWORD:-}
     depends_on:
       postgres:
         condition: service_healthy
