@@ -7,9 +7,9 @@ export function hashState(state: GameState): string {
     seed: state.seed,
     rng: state.rng,
     tick: state.tick,
-    width: state.width,
-    height: state.height,
-    theme: state.theme,
+    ...(state.engineVersion >= 5
+      ? { width: state.width, height: state.height, theme: state.theme }
+      : {}),
     grid: state.grid,
     players: state.players,
     bombs: state.bombs,

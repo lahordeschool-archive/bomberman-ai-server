@@ -94,7 +94,7 @@ describe('deterministic replay', () => {
     expect(hashState(replayed)).not.toBe(hashState(state));
   });
 
-  it.each([1, 2, 3])(
+  it.each([1, 2, 3, 4])(
     'still re-simulates matches recorded with engine v%i under its rules',
     (version) => {
       const decisions: Intent[][] = [
