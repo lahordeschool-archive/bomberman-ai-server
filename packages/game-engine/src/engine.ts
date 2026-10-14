@@ -1,4 +1,6 @@
 import {
+  ARENA_THEMES,
+  ARENA_WIDTHS,
   BOMB_FUSE_TICKS,
   Cell,
   DEFAULT_MAX_TICKS,
@@ -15,7 +17,6 @@ import {
   MIN_SPEED,
   SCORE_WEIGHTS,
   OBSERVATION_INTERVAL_TICKS,
-  SPAWN_POINTS,
   SUPPORTED_ENGINE_VERSIONS,
   TICK_MS,
   TURN_TICKS_BY_SPEED,
@@ -23,7 +24,7 @@ import {
   type Direction,
   type ItemType,
 } from './constants.ts';
-import { cellIndex, generateMap, isInside } from './map.ts';
+import { cellIndex, generateMap, isInside, spawnPoints } from './map.ts';
 import { normalizeSeed, randomInt } from './rng.ts';
 import type {
   BombState,
@@ -76,10 +77,16 @@ export function createGame({
   }
   const normalized = normalizeSettings(settings);
   const rngState = { rng: normalizeSeed(seed) };
-  const { grid, items } = generateMap(rngState);
+  const variedArena = engineVersion >= 5;
+  const width = variedArena ? ARENA_WIDTHS[randomInt(rngState, ARENA_WIDTHS.length)]! : GRID_WIDTH;
+  const theme = variedArena
+    ? ARENA_THEMES[randomInt(rngState, ARENA_THEMES.length)]!
+    : ARENA_THEMES[0];
+  const { grid, items } = generateMap(rngState, width, GRID_HEIGHT);
+  const spawns = spawnPoints(width, GRID_HEIGHT);
   const players: PlayerState[] = [];
   for (let id = 0; id < playerCount; id++) {
-    const spawn = SPAWN_POINTS[id]!;
+    const spawn = spawns[id]!;
     players.push({
       id,
       x: spawn.x,
@@ -104,8 +111,9 @@ export function createGame({
     rng: rngState.rng,
     tick: 0,
     settings: normalized,
-    width: GRID_WIDTH,
+    width,
     height: GRID_HEIGHT,
+    theme,
     grid,
     players,
     bombs: [],
@@ -190,12 +198,14 @@ export function step(state: GameState): GameState {
   const exploding = state.bombs.filter((bomb) => bomb.fuse <= 0).map((bomb) => bomb.id);
   if (exploding.length > 0) detonate(state, exploding, events);
 
-  const flameCells = new Map(state.flames.map((flame) => [cellIndex(flame.x, flame.y), flame]));
+  const flameCells = new Map(
+    state.flames.map((flame) => [cellIndex(flame.x, flame.y, state.width), flame]),
+  );
   const dying = state.players.filter(
-    (player) => player.alive && flameCells.has(cellIndex(player.x, player.y)),
+    (player) => player.alive && flameCells.has(cellIndex(player.x, player.y, state.width)),
   );
   for (const player of dying) {
-    const flame = flameCells.get(cellIndex(player.x, player.y))!;
+    const flame = flameCells.get(cellIndex(player.x, player.y, state.width))!;
     player.alive = false;
     player.move = null;
     player.queuedMove = null;

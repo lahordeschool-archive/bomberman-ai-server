@@ -1,4 +1,4 @@
-import type { Direction, ItemType } from './constants.ts';
+import type { ArenaTheme, Direction, ItemType } from './constants.ts';
 
 export interface MatchSettings {
   /** Initial bomb capacity per player. */
@@ -110,6 +110,8 @@ export interface GameState {
   settings: MatchSettings;
   width: number;
   height: number;
+  /** Visual scene selected deterministically from the match seed. */
+  theme: ArenaTheme;
   /** Row-major cell values, index = y * width + x. */
   grid: number[];
   players: PlayerState[];

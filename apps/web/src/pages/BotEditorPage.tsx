@@ -808,7 +808,8 @@ export default function BotEditorPage({ botId }: { botId: string }) {
               <p className="muted">
                 Ranked matches run your active version in an isolated sandbox on the server. Each
                 turn gets 100 ms of CPU and must answer within {DECISION_BUDGET_MS} ms (less for a
-                player sped up by roller skates), or it is skipped. Only these matches change your rating.
+                player sped up by roller skates), or it is skipped. Only these matches change your
+                rating.
               </p>
               <div className="toolbar">
                 <Button

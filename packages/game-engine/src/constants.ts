@@ -3,14 +3,19 @@
  * v2: speed sets each player's own turn interval (`TURN_TICKS_BY_SPEED_V2`).
  * v3: same rules at the legacy pace (`TURN_TICKS_BY_SPEED`).
  * v4: v3 plus tiebreakers on equal scores (kills, then walls, then items).
+ * v5: v4 plus seeded arena width and scene variations.
  */
-export const ENGINE_VERSION = 4;
+export const ENGINE_VERSION = 5;
 /** Versions `runReplay` can still re-simulate. */
-export const SUPPORTED_ENGINE_VERSIONS: readonly number[] = [1, 2, 3, 4];
+export const SUPPORTED_ENGINE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5];
 
 export const TICK_MS = 50;
 export const GRID_WIDTH = 15;
 export const GRID_HEIGHT = 13;
+/** Odd widths preserve the classic alternating pillar layout. */
+export const ARENA_WIDTHS: readonly number[] = [11, 13, 15, 17];
+export const ARENA_THEMES = ['grass', 'cave', 'water'] as const;
+export type ArenaTheme = (typeof ARENA_THEMES)[number];
 export const TILE_SIZE = 16;
 export const MAX_PLAYERS = 4;
 export const MIN_PLAYERS = 2;

@@ -30,7 +30,7 @@ describe('legacy rule parity', () => {
 
   it('never puts soft walls on spawn cells and their inward neighbours', () => {
     for (let seed = 0; seed < 50; seed++) {
-      const state = createGame({ seed, playerCount: 4 });
+      const state = createGame({ seed, playerCount: 4, engineVersion: 4 });
       for (const { x, y } of SAFE_CELLS) expect(state.grid[cellIndex(x, y)]).toBe(Cell.Floor);
     }
   });
@@ -50,7 +50,7 @@ describe('legacy rule parity', () => {
     let soft = 0;
     let items = 0;
     for (let seed = 0; seed < 200; seed++) {
-      const state = createGame({ seed, playerCount: 2 });
+      const state = createGame({ seed, playerCount: 2, engineVersion: 4 });
       state.grid.forEach((cell, index) => {
         const x = index % GRID_WIDTH;
         const y = Math.floor(index / GRID_WIDTH);
@@ -80,9 +80,9 @@ describe('legacy rule parity', () => {
   });
 
   it('generates the same map for the same seed and different maps for different seeds', () => {
-    const a = createGame({ seed: 123, playerCount: 4 });
-    const b = createGame({ seed: 123, playerCount: 4 });
-    const c = createGame({ seed: 124, playerCount: 4 });
+    const a = createGame({ seed: 123, playerCount: 4, engineVersion: 4 });
+    const b = createGame({ seed: 123, playerCount: 4, engineVersion: 4 });
+    const c = createGame({ seed: 124, playerCount: 4, engineVersion: 4 });
     expect(a.grid).toEqual(b.grid);
     expect(a.items).toEqual(b.items);
     expect(a.grid).not.toEqual(c.grid);
