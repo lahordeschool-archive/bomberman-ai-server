@@ -40,7 +40,9 @@ export function MatchEndOverlay({
     return (
       <div className="arena-overlay" role="status">
         <div className="match-end">
-          <p className="match-end-title">{result.reason === 'timeout' ? "Time's up!" : 'Game over'}</p>
+          <p className="match-end-title">
+            {result.reason === 'timeout' ? "Time's up!" : 'Game over'}
+          </p>
           <p className="match-end-winner">{winner ? `${winner} wins` : 'Draw'}</p>
           <p className="muted">Back to the matches in {Math.max(0, leaveIn)}…</p>
           <div className="match-end-actions">
