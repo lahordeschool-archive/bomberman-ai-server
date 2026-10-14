@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { createGame, hashState, runReplay, step, turnTicks } from '@bomberman/game-engine';
+import {
+  ARENA_SHRINK_INTERVAL_TICKS,
+  createGame,
+  hashState,
+  runReplay,
+  step,
+  turnTicks,
+} from '@bomberman/game-engine';
 import {
   botSeed,
   buildObservation,
@@ -180,7 +187,10 @@ describe('sample bots and match loop', () => {
         decisionTimeoutMs: 1000,
       });
       if (state.result!.winnerId === 0) bomberWins++;
-      if (!state.players[0]!.alive && state.players[0]!.killedBy === null) bomberSelfKills++;
+      const player = state.players[0]!;
+      const arenaCrush =
+        player.diedAtTick !== null && (player.diedAtTick + 1) % ARENA_SHRINK_INTERVAL_TICKS === 0;
+      if (!player.alive && player.killedBy === null && !arenaCrush) bomberSelfKills++;
     }
     expect(bomberSelfKills).toBeLessThanOrEqual(1);
     expect(bomberWins).toBeGreaterThanOrEqual(4);
@@ -204,7 +214,10 @@ describe('sample bots and match loop', () => {
       lineup.forEach((bot, id) => {
         const entry = games.get(bot.slug)!;
         entry.played++;
-        if (!state.players[id]!.alive && state.players[id]!.killedBy === null) entry.self++;
+        const player = state.players[id]!;
+        const arenaCrush =
+          player.diedAtTick !== null && (player.diedAtTick + 1) % ARENA_SHRINK_INTERVAL_TICKS === 0;
+        if (!player.alive && player.killedBy === null && !arenaCrush) entry.self++;
         entry.bombs += intents.filter((i) => i.playerId === id && i.intent.type === 'bomb').length;
       });
     }

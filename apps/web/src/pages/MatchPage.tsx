@@ -51,6 +51,8 @@ function ReplayPlayer({
   const [speed, setSpeed] = useState(1);
   const indexRef = useRef(0);
   const last = timeline.snapshots.length - 1;
+  const currentTick = timeline.snapshots[index]?.tick ?? 0;
+  const finalTick = timeline.snapshots[last]?.tick ?? 0;
 
   const show = useCallback(
     (next: number, instant: boolean) => {
@@ -117,7 +119,8 @@ function ReplayPlayer({
         }}
       />
       <span className="mono">
-        {formatClock(index)} / {formatClock(last)}
+        {formatClock(currentTick)} / {formatClock(finalTick)} actual ·{' '}
+        {formatClock(timeline.maxTicks)} limit
       </span>
       <select
         value={speed}

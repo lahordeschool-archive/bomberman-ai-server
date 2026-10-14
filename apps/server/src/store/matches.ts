@@ -3,7 +3,7 @@ import type { MatchParticipantSummary, MatchSummary, ReplayResponse } from '@bom
 import { encodeIntent } from '@bomberman/protocol';
 import type { Queryable } from '../db/database.ts';
 import { iso, isoOrNull } from '../db/rows.ts';
-import { multiplayerElo } from '../ratings/elo.ts';
+import { DECISIVE_ELO_K, multiplayerElo } from '../ratings/elo.ts';
 import { awardMatchAchievements } from './achievements.ts';
 import { DEFAULT_RATING } from './bots.ts';
 
@@ -86,10 +86,14 @@ export async function completeMatch(
   outcome: { result: MatchResult; intents: RecordedIntent[]; finalHash: string },
 ): Promise<void> {
   const { result, intents, finalHash } = outcome;
-  const { rows } = await tx.query<{ rated: boolean; tournament_id: string | null }>(
+  const { rows } = await tx.query<{
+    rated: boolean;
+    tournament_id: string | null;
+    engine_version: number;
+  }>(
     `update matches set status = 'completed', ended_at = now(), end_tick = $2, end_reason = $3,
        winner_slot = $4, final_hash = $5
-     where id = $1 and status = 'running' returning rated, tournament_id`,
+     where id = $1 and status = 'running' returning rated, tournament_id, engine_version`,
     [id, result.endTick, result.reason, result.winnerId, finalHash],
   );
   if (!rows[0]) throw new Error(`Match ${id} is not running`);
@@ -129,6 +133,7 @@ export async function completeMatch(
 
   if (rows[0].rated) await applyRatings(tx, id);
   const tournamentId = rows[0].tournament_id;
+  const decisive = rows[0].engine_version >= 6 && result.reason === 'lastStanding';
   if (tournamentId) {
     for (const player of result.players) {
       const participant = await tx.query<{ bot_id: string | null }>(
@@ -145,7 +150,9 @@ export async function completeMatch(
             tournamentId,
             botId,
             player.playerId === result.winnerId ? 1 : 0,
-            result.players.length - player.placement,
+            result.players.length -
+              player.placement +
+              (decisive && player.playerId === result.winnerId ? 1 : 0),
           ],
         );
       }
@@ -163,6 +170,20 @@ export async function completeMatch(
 
 /** Updates ratings for one completed ranked match from its stored placements. */
 export async function applyRatings(tx: Queryable, matchId: string): Promise<void> {
+  const match = await tx.query<{
+    engine_version: number;
+    end_reason: MatchResult['reason'];
+    winner_slot: number | null;
+  }>(
+    `select engine_version, end_reason, winner_slot
+     from matches where id = $1 and status = 'completed'`,
+    [matchId],
+  );
+  const decisive =
+    match.rows[0]?.engine_version !== undefined &&
+    match.rows[0].engine_version >= 6 &&
+    match.rows[0].end_reason === 'lastStanding' &&
+    match.rows[0].winner_slot !== null;
   const { rows } = await tx.query<{ slot: number; bot_id: string; placement: number }>(
     `select slot, bot_id, placement from match_participants
      where match_id = $1 and bot_id is not null and placement is not null
@@ -183,6 +204,7 @@ export async function applyRatings(tx: Queryable, matchId: string): Promise<void
   const before = rows.map((row) => ratingOf.get(row.bot_id) ?? DEFAULT_RATING);
   const after = multiplayerElo(
     rows.map((row, index) => ({ rating: before[index]!, placement: row.placement })),
+    decisive ? DECISIVE_ELO_K : undefined,
   );
   for (const [index, row] of rows.entries()) {
     await tx.query(

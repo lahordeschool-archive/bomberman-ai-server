@@ -9,6 +9,7 @@ import { decodeIntent, type ReplayResponse } from '@bomberman/protocol';
 
 export interface ReplayTimeline {
   snapshots: Snapshot[];
+  maxTicks: number;
   verified: boolean;
   computedHash: string;
 }
@@ -36,5 +37,10 @@ export function buildTimeline(replay: ReplayResponse): ReplayTimeline {
     (state) => snapshots.push(toSnapshot(state)),
   );
   const computedHash = hashState(final);
-  return { snapshots, verified: computedHash === replay.finalHash, computedHash };
+  return {
+    snapshots,
+    maxTicks: replay.settings.maxTicks,
+    verified: computedHash === replay.finalHash,
+    computedHash,
+  };
 }

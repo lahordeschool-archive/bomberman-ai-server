@@ -4,10 +4,11 @@
  * v3: same rules at the legacy pace (`TURN_TICKS_BY_SPEED`).
  * v4: v3 plus tiebreakers on equal scores (kills, then walls, then items).
  * v5: v4 plus seeded arena width and scene variations.
+ * v6: v5 plus hard-wall arena shrinking after each of the first two minutes.
  */
-export const ENGINE_VERSION = 5;
+export const ENGINE_VERSION = 6;
 /** Versions `runReplay` can still re-simulate. */
-export const SUPPORTED_ENGINE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5];
+export const SUPPORTED_ENGINE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6];
 
 export const TICK_MS = 50;
 export const GRID_WIDTH = 15;
@@ -33,6 +34,9 @@ export const TURN_TICKS_BY_SPEED_V2: readonly number[] = [8, 5, 4, 3];
 export const BOMB_FUSE_TICKS = 50;
 export const FLAME_TICKS = 10;
 export const DEFAULT_MAX_TICKS = 3 * 60 * (1000 / TICK_MS);
+/** Engine v6 closes one complete outer ring at one and two minutes. */
+export const ARENA_SHRINK_INTERVAL_TICKS = 60 * (1000 / TICK_MS);
+export const ARENA_SHRINK_RINGS = 2;
 
 export const SOFT_WALL_DENSITY = 0.85;
 export const ITEM_CHANCE = 0.2;

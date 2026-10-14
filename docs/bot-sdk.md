@@ -157,6 +157,8 @@ Item types: `extraBomb`, `flameUp`, `maxFlame`, `speedUp`, `speedDown` (see
 - A player switches tiles halfway through a move, so `x`/`y` may jump before the
   animation ends.
 - When a player dies, the power ups they collected are scattered on free tiles.
+- At 1:00 and 2:00, the indestructible outer walls advance inward by one complete
+  ring. Players caught in the closing ring die, and covered bombs and items disappear.
 - A match ends when one bot (or none) is left, or after `maxTicks` (3 minutes).
   Survivors rank above the dead and are ordered by score
   (kill 100, wall 5, item 10); the dead are ordered by survival time, then score.

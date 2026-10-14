@@ -3,7 +3,7 @@ import { createGame, hashState, runReplay, step } from '@bomberman/game-engine';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AppContext } from '../src/context.ts';
-import { multiplayerElo } from '../src/ratings/elo.ts';
+import { DECISIVE_ELO_K, multiplayerElo } from '../src/ratings/elo.ts';
 import { completeMatch, insertMatch, rebuildRatings } from '../src/store/matches.ts';
 import { createTestApp, TestClient } from './helpers.ts';
 
@@ -446,5 +446,16 @@ describe('multiplayer elo', () => {
       { rating: 1200, placement: 1 },
     ]);
     expect(tie).toEqual([1200, 1200]);
+  });
+
+  it('moves ratings further for a decisive result', () => {
+    const entrants = [
+      { rating: 1200, placement: 1 },
+      { rating: 1200, placement: 2 },
+    ];
+    const timeout = multiplayerElo(entrants);
+    const decisive = multiplayerElo(entrants, DECISIVE_ELO_K);
+    expect(decisive[0]! - 1200).toBeGreaterThan(timeout[0]! - 1200);
+    expect(1200 - decisive[1]!).toBeGreaterThan(1200 - timeout[1]!);
   });
 });

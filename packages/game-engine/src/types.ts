@@ -84,6 +84,7 @@ export type GameEvent =
   | { type: 'itemCollected'; x: number; y: number; item: ItemType; playerId: number }
   | { type: 'itemDestroyed'; x: number; y: number; item: ItemType }
   | { type: 'playerDied'; playerId: number; killedBy: number | null }
+  | { type: 'arenaShrunk'; inset: number }
   | { type: 'matchEnded'; winnerId: number | null; reason: 'lastStanding' | 'timeout' };
 
 export interface PlayerResult {

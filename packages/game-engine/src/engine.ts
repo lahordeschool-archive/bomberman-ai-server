@@ -1,4 +1,6 @@
 import {
+  ARENA_SHRINK_INTERVAL_TICKS,
+  ARENA_SHRINK_RINGS,
   ARENA_THEMES,
   ARENA_WIDTHS,
   BOMB_FUSE_TICKS,
@@ -206,16 +208,11 @@ export function step(state: GameState): GameState {
   );
   for (const player of dying) {
     const flame = flameCells.get(cellIndex(player.x, player.y, state.width))!;
-    player.alive = false;
-    player.move = null;
-    player.queuedMove = null;
-    player.queuedBomb = false;
-    player.diedAtTick = state.tick;
-    player.killedBy = flame.ownerId === player.id ? null : flame.ownerId;
-    if (player.killedBy !== null) state.players[player.killedBy]!.stats.kills++;
-    events.push({ type: 'playerDied', playerId: player.id, killedBy: player.killedBy });
+    killPlayer(state, player, flame.ownerId === player.id ? null : flame.ownerId, events);
   }
   for (const player of dying) scatterItems(state, player);
+
+  if (state.engineVersion >= 6) shrinkArenaIfDue(state, events);
 
   const alive = state.players.filter((player) => player.alive);
   if (alive.length <= 1) finish(state, 'lastStanding', events);
@@ -223,6 +220,64 @@ export function step(state: GameState): GameState {
 
   state.tick++;
   return state;
+}
+
+function killPlayer(
+  state: GameState,
+  player: PlayerState,
+  killedBy: number | null,
+  events: GameEvent[],
+): void {
+  player.alive = false;
+  player.move = null;
+  player.queuedMove = null;
+  player.queuedBomb = false;
+  player.diedAtTick = state.tick;
+  player.killedBy = killedBy;
+  if (killedBy !== null) state.players[killedBy]!.stats.kills++;
+  events.push({ type: 'playerDied', playerId: player.id, killedBy });
+}
+
+function shrinkArenaIfDue(state: GameState, events: GameEvent[]): void {
+  const nextTick = state.tick + 1;
+  if (nextTick % ARENA_SHRINK_INTERVAL_TICKS !== 0) return;
+  const inset = nextTick / ARENA_SHRINK_INTERVAL_TICKS;
+  if (inset < 1 || inset > ARENA_SHRINK_RINGS) return;
+
+  const isClosingCell = (x: number, y: number) =>
+    x === inset || x === state.width - 1 - inset || y === inset || y === state.height - 1 - inset;
+
+  for (let y = inset; y < state.height - inset; y++) {
+    for (let x = inset; x < state.width - inset; x++) {
+      if (isClosingCell(x, y)) state.grid[cellIndex(x, y, state.width)] = Cell.Hard;
+    }
+  }
+
+  state.bombs = state.bombs.filter((bomb) => !isClosingCell(bomb.x, bomb.y));
+  state.flames = state.flames.filter((flame) => !isClosingCell(flame.x, flame.y));
+  state.items = state.items.filter((item) => {
+    if (!isClosingCell(item.x, item.y)) return true;
+    if (!item.hidden) events.push({ type: 'itemDestroyed', x: item.x, y: item.y, item: item.type });
+    return false;
+  });
+
+  const crushed = state.players.filter(
+    (player) => player.alive && isClosingCell(player.x, player.y),
+  );
+  for (const player of crushed) killPlayer(state, player, null, events);
+  for (const player of crushed) scatterItems(state, player);
+
+  for (const player of state.players) {
+    if (
+      player.alive &&
+      player.move &&
+      (isClosingCell(player.move.fromX, player.move.fromY) ||
+        isClosingCell(player.move.toX, player.move.toY))
+    ) {
+      player.move = null;
+    }
+  }
+  events.push({ type: 'arenaShrunk', inset });
 }
 
 function plantBomb(state: GameState, player: PlayerState, events: GameEvent[]): void {

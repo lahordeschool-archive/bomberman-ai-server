@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyIntent,
+  ARENA_SHRINK_INTERVAL_TICKS,
   ARENA_THEMES,
   ARENA_WIDTHS,
   BOMB_FUSE_TICKS,
@@ -301,6 +302,73 @@ describe('timeouts and scoring', () => {
     expect(snapshot.players[0]!.px).toBeGreaterThan(1);
     expect(snapshot.players[0]!.px).toBeLessThan(2);
     expect(snapshot.items.length).toBe(state.items.filter((item) => !item.hidden).length);
+  });
+});
+
+describe('arena shrinking', () => {
+  it('closes one hard-wall ring at each of the first two minutes', () => {
+    const state = emptyArena(3);
+    state.players[0]!.x = 2;
+    state.players[0]!.y = 3;
+    state.players[1]!.x = 4;
+    state.players[1]!.y = 3;
+    state.players[2]!.x = 6;
+    state.players[2]!.y = 3;
+
+    stepN(state, ARENA_SHRINK_INTERVAL_TICKS, step);
+    expect(state.grid[cellIndex(1, 3, state.width)]).toBe(Cell.Hard);
+    expect(state.grid[cellIndex(2, 3, state.width)]).toBe(Cell.Floor);
+    expect(state.events).toContainEqual({ type: 'arenaShrunk', inset: 1 });
+
+    stepN(state, ARENA_SHRINK_INTERVAL_TICKS, step);
+    expect(state.grid[cellIndex(2, 3, state.width)]).toBe(Cell.Hard);
+    expect(state.grid[cellIndex(3, 3, state.width)]).toBe(Cell.Floor);
+    expect(state.events).toContainEqual({ type: 'arenaShrunk', inset: 2 });
+  });
+
+  it('crushes players and clears entities covered by a closing ring', () => {
+    const state = emptyArena(3);
+    const crushed = state.players[0]!;
+    crushed.x = 1;
+    crushed.y = 3;
+    state.players[1]!.x = 1;
+    state.players[1]!.y = 7;
+    state.players[2]!.x = 5;
+    state.players[2]!.y = 3;
+    state.bombs.push({ id: 1, ownerId: 0, x: 1, y: 4, fuse: 20, range: 2 });
+    state.flames.push({ x: 1, y: 5, ownerId: 0, kind: 'center', ticksLeft: 5 });
+    state.items.push({ x: 1, y: 6, type: 'extraBomb', hidden: false });
+    state.tick = ARENA_SHRINK_INTERVAL_TICKS - 1;
+
+    step(state);
+
+    expect(crushed).toMatchObject({
+      alive: false,
+      killedBy: null,
+      diedAtTick: ARENA_SHRINK_INTERVAL_TICKS - 1,
+    });
+    expect(state.bombs).toHaveLength(0);
+    expect(state.flames).toHaveLength(0);
+    expect(state.items).toHaveLength(0);
+    expect(state.events).toContainEqual({ type: 'playerDied', playerId: 0, killedBy: null });
+    expect(state.events).toContainEqual({
+      type: 'itemDestroyed',
+      x: 1,
+      y: 6,
+      item: 'extraBomb',
+    });
+    expect(state.result).toMatchObject({ reason: 'lastStanding', winnerId: 2 });
+  });
+
+  it('keeps engine v5 arenas unchanged for deterministic legacy replays', () => {
+    const state = createGame({ seed: 1, playerCount: 2, engineVersion: 5 });
+    const before = [...state.grid];
+    state.tick = ARENA_SHRINK_INTERVAL_TICKS - 1;
+
+    step(state);
+
+    expect(state.grid).toEqual(before);
+    expect(state.events).not.toContainEqual({ type: 'arenaShrunk', inset: 1 });
   });
 });
 

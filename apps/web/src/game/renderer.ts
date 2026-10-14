@@ -46,6 +46,7 @@ class ArenaScene extends Phaser.Scene {
   private queued: { snapshot: Snapshot; instant: boolean } | null = null;
   private background: Phaser.GameObjects.Image[] = [];
   private arenaKey = '';
+  private arenaGrid = '';
   private arenaHeight = HEIGHT;
   private walls = new Map<number, Phaser.GameObjects.Sprite>();
   private items = new Map<string, Phaser.GameObjects.Sprite>();
@@ -258,7 +259,8 @@ class ArenaScene extends Phaser.Scene {
         );
       } else if (!isSoft && sprite) {
         this.walls.delete(index);
-        if (instant) {
+        const becameHard = Number(snapshot.grid[index]) === Cell.Hard;
+        if (instant || becameHard) {
           sprite.destroy();
         } else if (snapshot.theme === 'grass') {
           sprite.play(`${colorOf(owners.get(index) ?? 0)}-wall-destroyed`);
@@ -278,12 +280,15 @@ class ArenaScene extends Phaser.Scene {
 
   private syncArena(snapshot: Snapshot): void {
     const key = `${snapshot.width}x${snapshot.height}:${snapshot.theme}`;
-    if (key === this.arenaKey) return;
-    this.clearAll();
-    for (const tile of this.background) tile.destroy();
-    this.background = [];
-    this.arenaKey = key;
-    this.arenaHeight = snapshot.height * TILE_SIZE;
+    const rebuild = key !== this.arenaKey;
+    if (!rebuild && snapshot.grid === this.arenaGrid) return;
+    if (rebuild) {
+      this.clearAll();
+      for (const tile of this.background) tile.destroy();
+      this.background = [];
+      this.arenaKey = key;
+      this.arenaHeight = snapshot.height * TILE_SIZE;
+    }
 
     for (let index = 0; index < snapshot.grid.length; index++) {
       const x = index % snapshot.width;
@@ -296,21 +301,31 @@ class ArenaScene extends Phaser.Scene {
           : above === Cell.Hard
             ? TILE_FRAMES.shadow
             : TILE_FRAMES.grass;
-        this.background.push(
-          this.add
-            .image(x * TILE_SIZE, y * TILE_SIZE, 'tiles', frame)
-            .setOrigin(0, 0)
-            .setDepth(0),
-        );
+        if (rebuild) {
+          this.background.push(
+            this.add
+              .image(x * TILE_SIZE, y * TILE_SIZE, 'tiles', frame)
+              .setOrigin(0, 0)
+              .setDepth(0),
+          );
+        } else {
+          this.background[index]!.setTexture('tiles', frame);
+        }
       } else {
-        this.background.push(
-          this.add
-            .image(x * TILE_SIZE, y * TILE_SIZE, tileKey(snapshot.theme, hard ? 'hard' : 'floor'))
-            .setOrigin(0, 0)
-            .setDepth(0),
-        );
+        const texture = tileKey(snapshot.theme, hard ? 'hard' : 'floor');
+        if (rebuild) {
+          this.background.push(
+            this.add
+              .image(x * TILE_SIZE, y * TILE_SIZE, texture)
+              .setOrigin(0, 0)
+              .setDepth(0),
+          );
+        } else {
+          this.background[index]!.setTexture(texture);
+        }
       }
     }
+    this.arenaGrid = snapshot.grid;
   }
 
   private createThemeTextures(): void {

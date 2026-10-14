@@ -1,4 +1,6 @@
 export const ELO_K = 32;
+/** Decisive engine-v6+ wins move the ladder 25% more than timeout placements. */
+export const DECISIVE_ELO_K = 40;
 
 export interface EloEntrant {
   rating: number;
