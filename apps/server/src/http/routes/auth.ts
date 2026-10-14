@@ -28,6 +28,7 @@ const RESERVED_USERNAMES = new Set([
   'moderator',
   'support',
   'api',
+  'sharkey',
 ]);
 const INVALID_LOGIN = 'Incorrect username or password.';
 

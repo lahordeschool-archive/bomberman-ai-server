@@ -11,9 +11,12 @@ import { MatchesPage } from './pages/MatchesPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { AccountPage } from './pages/AccountPage.tsx';
 import { ProfilePage } from './pages/ProfilePage.tsx';
+import { TournamentsPage } from './pages/TournamentsPage.tsx';
 
 const BotPage = lazy(() => import('./pages/BotPage.tsx'));
 const MatchPage = lazy(() => import('./pages/MatchPage.tsx'));
+const TournamentPage = lazy(() => import('./pages/TournamentPage.tsx'));
+const AdminPage = lazy(() => import('./pages/AdminPage.tsx'));
 
 function RequireUser({ children }: { children: ReactNode }) {
   const { user, loading } = useSession();
@@ -29,6 +32,14 @@ function Routes() {
   if (path === '/register') return <AuthPage mode="register" />;
   if (path === '/leaderboard') return <LeaderboardPage />;
   if (path === '/matches') return <MatchesPage />;
+  if (path === '/tournaments') return <TournamentsPage />;
+  if (path === '/admin') {
+    return (
+      <RequireUser>
+        <AdminPage />
+      </RequireUser>
+    );
+  }
   if (path === '/account') {
     return (
       <RequireUser>
@@ -42,6 +53,8 @@ function Routes() {
   if (match) return <MatchPage matchId={match.id!} />;
   const profile = matchPath('/u/:username', path);
   if (profile) return <ProfilePage username={profile.username!} />;
+  const tournament = matchPath('/tournaments/:slug', path);
+  if (tournament) return <TournamentPage slug={tournament.slug!} />;
   return <NotFoundPage />;
 }
 

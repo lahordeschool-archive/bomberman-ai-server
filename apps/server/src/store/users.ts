@@ -1,4 +1,4 @@
-import type { PublicUser } from '@bomberman/protocol';
+import type { PublicUser, UserRole } from '@bomberman/protocol';
 import type { Queryable } from '../db/database.ts';
 import { iso } from '../db/rows.ts';
 
@@ -8,6 +8,7 @@ export interface UserRow {
   display_name: string;
   password_hash: string;
   is_house: boolean;
+  role: UserRole;
   created_at: Date;
 }
 
@@ -17,6 +18,7 @@ export function toPublicUser(row: UserRow): PublicUser {
     username: row.username,
     displayName: row.display_name,
     createdAt: iso(row.created_at),
+    role: row.role,
   };
 }
 
@@ -51,6 +53,14 @@ export async function updatePasswordHash(
     userId,
     passwordHash,
   ]);
+}
+
+export async function updateUserRole(
+  db: Queryable,
+  userId: string,
+  role: UserRole,
+): Promise<void> {
+  await db.query('update users set role = $2 where id = $1 and not is_house', [userId, role]);
 }
 
 export async function recordAudit(

@@ -7,6 +7,7 @@ import { RunnerClient } from './runner/executor.ts';
 import { createServer } from './server.ts';
 import { ensureHouseBots } from './store/house.ts';
 import { abortStaleMatches } from './store/matches.ts';
+import { ensureSharkeyAdmin } from './store/staff.ts';
 
 let config;
 try {
@@ -26,6 +27,7 @@ const context: AppContext = {
 const { app, matchmaker, close } = await createServer(context);
 
 await migrate(db, (message) => app.log.info(message));
+await ensureSharkeyAdmin(db, config.sharkeyAdminPassword);
 context.house = await ensureHouseBots(db);
 const aborted = await abortStaleMatches(db);
 if (aborted > 0) app.log.warn({ count: aborted }, 'marked interrupted matches as aborted');

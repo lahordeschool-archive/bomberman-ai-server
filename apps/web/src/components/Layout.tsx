@@ -16,6 +16,14 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
       <Link to="/leaderboard" onClick={onNavigate}>
         Leaderboard
       </Link>
+      <Link to="/tournaments" onClick={onNavigate}>
+        Tournaments
+      </Link>
+      {user?.role === 'moderator' || user?.role === 'admin' ? (
+        <Link to="/admin" onClick={onNavigate}>
+          Admin
+        </Link>
+      ) : null}
       {user ? (
         <Link to="/account" onClick={onNavigate}>
           {user.displayName}
