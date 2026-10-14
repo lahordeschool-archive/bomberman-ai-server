@@ -29,6 +29,8 @@ services:
       - '443:443/udp'
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      # www + previous public hostname(s); empty is fine for a local localhost trial.
+      REDIRECT_ADDRESSES: ${REDIRECT_ADDRESSES:-}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -48,6 +50,7 @@ services:
       DATABASE_URL: postgres://bomber@postgres:5432/bomber
       PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN in .env}
+      REDIRECT_HOSTS: ${REDIRECT_HOSTS:-}
       RUNNER_URL: http://bot-runner:8090
       RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN in .env}
       TRUST_PROXY: uniquelocal

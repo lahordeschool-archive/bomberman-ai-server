@@ -7,8 +7,15 @@
 	}
 }
 
-# SITE_ADDRESS is your domain (automatic HTTPS) or `localhost` for a local trial.
-{$SITE_ADDRESS} {
+# SITE_ADDRESS is the canonical hostname (automatic HTTPS), or `localhost` locally.
+# REDIRECT_ADDRESSES are extra hostnames (www + previous public URL) that permanently
+# redirect to SITE_ADDRESS, preserving the path. Space or comma separated; may be empty.
+{$SITE_ADDRESS} {$REDIRECT_ADDRESSES} {
+	@redirect {
+		not host {$SITE_ADDRESS}
+	}
+	redir @redirect https://{$SITE_ADDRESS}{uri} permanent
+
 	encode zstd gzip
 
 	request_body {

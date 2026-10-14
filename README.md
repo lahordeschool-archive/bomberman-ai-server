@@ -66,13 +66,18 @@ cp .env.example .env    # set PUBLIC_ORIGIN, SITE_ADDRESS, POSTGRES_PASSWORD, RU
 docker compose up -d --build
 ```
 
-Caddy terminates TLS and is the only published service; PostgreSQL and the bot runner
-live on internal networks.
+Canonical production host is **https://bomber-arena.com**. Point DNS `A`/`AAAA` for
+`bomber-arena.com` and `www.bomber-arena.com` (and any previous public hostname you
+still want to redirect) at the host. Caddy terminates TLS and is the only published
+service; PostgreSQL and the bot runner live on internal networks. Set
+`REDIRECT_ADDRESSES` / `REDIRECT_HOSTS` to `www.bomber-arena.com` plus your previous
+Coolify or sslip.io hostname so old bookmarks land on the new domain.
 
 On **Coolify** (or any host whose proxy already owns ports 80/443), point the
 resource at `docker-compose.coolify.yml` instead: same stack without Caddy. Give the
-`server` service your domain with its container port (`https://bomber.example.com:8080`)
-and set `PUBLIC_ORIGIN`, `POSTGRES_PASSWORD`, and `RUNNER_TOKEN`. Enable
+`server` service your domain with its container port (`https://bomber-arena.com:8080`),
+also attach `www` and the previous hostname, and set `PUBLIC_ORIGIN`,
+`REDIRECT_HOSTS`, `POSTGRES_PASSWORD`, and `RUNNER_TOKEN`. Enable
 **Advanced > Connect To Predefined Network**, or the proxy answers 504. Without a real
 domain, use `http://bomber.<server-ip>.sslip.io:8080`: the domains Coolify generates
 from a hostname such as `vps-7a227f8f.vps.ovh.net` resolve to the wrong address,

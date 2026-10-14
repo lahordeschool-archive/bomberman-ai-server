@@ -11,15 +11,30 @@ describe('loadConfig', () => {
   it('accepts a public origin given without a scheme, as hosting panels fill it', () => {
     const config = loadConfig({
       ...production,
-      PUBLIC_ORIGIN: 'bomber.example.com',
-      EXTRA_ORIGINS: 'www.example.com/',
+      PUBLIC_ORIGIN: 'bomber-arena.com',
+      EXTRA_ORIGINS: 'https://legacy.example.com/',
+      REDIRECT_HOSTS: 'bomber.1-2-3-4.sslip.io, https://Old.Example.com',
     });
-    expect(config.publicOrigin).toBe('https://bomber.example.com');
+    expect(config.publicOrigin).toBe('https://bomber-arena.com');
     expect(config.allowedOrigins).toEqual([
-      'https://bomber.example.com',
-      'https://www.example.com',
+      'https://bomber-arena.com',
+      'https://legacy.example.com',
+    ]);
+    expect(config.redirectHosts).toEqual([
+      'bomber.1-2-3-4.sslip.io',
+      'old.example.com',
+      'www.bomber-arena.com',
     ]);
     expect(config.cookieSecure).toBe(true);
+  });
+
+  it('does not auto-redirect www for loopback or IP public origins', () => {
+    const config = loadConfig({
+      ...production,
+      PUBLIC_ORIGIN: 'http://10.0.0.5:8080',
+      REDIRECT_HOSTS: 'old.example.com',
+    });
+    expect(config.redirectHosts).toEqual(['old.example.com']);
   });
 
   it('keeps an explicit scheme and port', () => {

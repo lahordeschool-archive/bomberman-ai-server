@@ -8,33 +8,40 @@ record pointing at the host.
 ```sh
 git clone <repo> /srv/bomber-arena && cd /srv/bomber-arena
 cp .env.example .env
-# PUBLIC_ORIGIN=https://bomber.example.com, SITE_ADDRESS=bomber.example.com
+# PUBLIC_ORIGIN=https://bomber-arena.com
+# SITE_ADDRESS=bomber-arena.com
+# REDIRECT_ADDRESSES / REDIRECT_HOSTS=www.bomber-arena.com,<previous-hostname>
 # POSTGRES_PASSWORD and RUNNER_TOKEN: openssl rand -hex 32
+# DNS: A/AAAA for bomber-arena.com, www, and the previous hostname → this host
 docker compose up -d --build
 docker compose ps        # all services healthy
 ```
 
-Caddy obtains and renews the TLS certificate automatically. The server applies
-database migrations at startup (guarded by an advisory lock) and seeds the house bots.
+Caddy obtains and renews TLS certificates for `SITE_ADDRESS` and every hostname in
+`REDIRECT_ADDRESSES`, and permanently redirects the latter to the canonical site
+(path preserved). The Node server does the same redirect from `REDIRECT_HOSTS`
+(useful on Coolify, where Caddy is not in the stack). The server applies database
+migrations at startup (guarded by an advisory lock) and seeds the house bots.
 
 ### Configuration
 
 The server validates its environment at startup and refuses to boot on invalid
 values (in production it also requires `RUNNER_TOKEN` and a PostgreSQL URL).
 
-| Variable                 | Default                 | Notes                                                   |
-| ------------------------ | ----------------------- | ------------------------------------------------------- |
-| `PUBLIC_ORIGIN`          | `http://localhost:8080` | Exact browser origin; used for CSRF and socket checks.  |
-| `DATABASE_URL`           | `pglite:./data/pglite`  | `postgres://…` in production.                           |
-| `RUNNER_URL`             | `http://localhost:8090` | Internal bot runner.                                    |
-| `RUNNER_TOKEN`           | dev token               | Shared secret, at least 16 characters.                  |
-| `TRUST_PROXY`            | `false`                 | Compose sets `uniquelocal` (Caddy on the private net).  |
-| `RANKED_CONCURRENCY`     | `2`                     | Simultaneous ranked matches (each needs runner CPU).    |
-| `MATCHMAKER_INTERVAL_MS` | `5000`                  |                                                         |
-| `SESSION_TTL_DAYS`       | `30`                    | Sliding expiry.                                         |
-| `MAX_BOTS_PER_USER`      | `10`                    |                                                         |
-| `REGISTRATIONS_PER_HOUR` | `30`                    | Per client IP. Raise it for a classroom behind one NAT. |
-| `LOG_LEVEL`              | `info`                  |                                                         |
+| Variable                 | Default                 | Notes                                                                                  |
+| ------------------------ | ----------------------- | -------------------------------------------------------------------------------------- |
+| `PUBLIC_ORIGIN`          | `http://localhost:8080` | Exact browser origin; used for CSRF and socket checks.                                 |
+| `REDIRECT_HOSTS`         | _(empty)_               | Extra hostnames that 301 to `PUBLIC_ORIGIN` (www of a real domain is always included). |
+| `DATABASE_URL`           | `pglite:./data/pglite`  | `postgres://…` in production.                                                          |
+| `RUNNER_URL`             | `http://localhost:8090` | Internal bot runner.                                                                   |
+| `RUNNER_TOKEN`           | dev token               | Shared secret, at least 16 characters.                                                 |
+| `TRUST_PROXY`            | `false`                 | Compose sets `uniquelocal` (Caddy on the private net).                                 |
+| `RANKED_CONCURRENCY`     | `2`                     | Simultaneous ranked matches (each needs runner CPU).                                   |
+| `MATCHMAKER_INTERVAL_MS` | `5000`                  |                                                                                        |
+| `SESSION_TTL_DAYS`       | `30`                    | Sliding expiry.                                                                        |
+| `MAX_BOTS_PER_USER`      | `10`                    |                                                                                        |
+| `REGISTRATIONS_PER_HOUR` | `30`                    | Per client IP. Raise it for a classroom behind one NAT.                                |
+| `LOG_LEVEL`              | `info`                  |                                                                                        |
 
 Runner: `RUNNER_WORKERS`, `RUNNER_MAX_SESSIONS`, `BOT_MEMORY_MB`, `BOT_CALL_TIMEOUT_MS`
 (CPU per synchronous run), `BOT_FETCH` (`on` by default, `off` blocks every bot

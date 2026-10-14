@@ -38,6 +38,19 @@ export async function buildApp(
   });
 
   app.setErrorHandler(errorHandler);
+
+  const redirectHosts = new Set(config.redirectHosts);
+  if (redirectHosts.size > 0) {
+    app.addHook('onRequest', async (request, reply) => {
+      // Probes and internal checks must keep working on any Host header.
+      if (request.url === '/healthz' || request.url === '/readyz') return;
+      const host = request.hostname.toLowerCase();
+      if (!redirectHosts.has(host)) return;
+      const target = new URL(request.url, config.publicOrigin);
+      return reply.redirect(target.toString(), 301);
+    });
+  }
+
   await app.register(fastifyCookie);
   await app.register(fastifyHelmet, {
     contentSecurityPolicy: {

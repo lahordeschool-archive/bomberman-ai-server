@@ -2,10 +2,13 @@
 # own proxy already owns ports 80/443 and terminates TLS.
 #
 # In Coolify: Docker Compose Location = /docker-compose.coolify.yml, then give the
-# `server` service your domain with its port, e.g. https://bomber.example.com:8080
+# `server` service your domain with its port, e.g. https://bomber-arena.com:8080
 # (the :8080 tells the proxy which container port to use; players never see it).
-# Set PUBLIC_ORIGIN (https://bomber.example.com), POSTGRES_PASSWORD and RUNNER_TOKEN
-# in the Environment Variables tab, and enable Advanced > Connect To Predefined Network.
+# Also attach www.bomber-arena.com and your previous public hostname; the server
+# 301-redirects those Host headers to PUBLIC_ORIGIN (path preserved).
+# Set PUBLIC_ORIGIN (https://bomber-arena.com), REDIRECT_HOSTS (previous hostname),
+# POSTGRES_PASSWORD and RUNNER_TOKEN in the Environment Variables tab, and enable
+# Advanced > Connect To Predefined Network.
 
 x-hardening: &hardening
   read_only: true
@@ -27,7 +30,8 @@ services:
       # The password stays out of the URL so any character works in it.
       DATABASE_URL: postgres://bomber@postgres:5432/bomber
       PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN, e.g. https://bomber.example.com}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN, e.g. https://bomber-arena.com}
+      REDIRECT_HOSTS: ${REDIRECT_HOSTS:-}
       RUNNER_URL: http://bot-runner:8090
       RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN}
       TRUST_PROXY: uniquelocal
