@@ -6,6 +6,7 @@ import { listBotsByOwner } from '../../store/bots.ts';
 import { getLeaderboard } from '../../store/leaderboard.ts';
 import { getMatchSummary, getReplay, listMatches } from '../../store/matches.ts';
 import { findUserByUsername, toPublicUser } from '../../store/users.ts';
+import { listUserAchievements } from '../../store/achievements.ts';
 import { notFound } from '../errors.ts';
 
 const usernameParam = z.object({ username: z.string().max(64).transform(normalizeUsername) });
@@ -47,6 +48,10 @@ export function registerPublicRoutes(app: FastifyInstance, context: AppContext):
     const { username } = usernameParam.parse(request.params);
     const user = await findUserByUsername(db, username);
     if (!user) throw notFound('That player');
-    return { user: toPublicUser(user), bots: await listBotsByOwner(db, user.id) };
+    const [bots, achievements] = await Promise.all([
+      listBotsByOwner(db, user.id),
+      listUserAchievements(db, user.id),
+    ]);
+    return { user: toPublicUser(user), bots, achievements };
   });
 }

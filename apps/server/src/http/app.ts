@@ -10,6 +10,8 @@ import { errorHandler, notFound } from './errors.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
 import { registerBotRoutes } from './routes/bots.ts';
 import { registerPublicRoutes } from './routes/public.ts';
+import { registerAdminRoutes } from './routes/admin.ts';
+import { registerTournamentRoutes } from './routes/tournaments.ts';
 import { registerSessions } from './session-plugin.ts';
 
 /**
@@ -94,6 +96,8 @@ export async function buildApp(
   registerAuthRoutes(app, context);
   registerBotRoutes(app, context);
   registerPublicRoutes(app, context);
+  registerTournamentRoutes(app, context);
+  registerAdminRoutes(app, context);
 
   const indexFile = join(config.webDist, 'index.html');
   if (existsSync(indexFile)) {

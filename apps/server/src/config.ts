@@ -22,6 +22,10 @@ const withScheme = (value: unknown) => {
 const boolean = z
   .enum(['true', 'false', '1', '0'])
   .transform((value) => value === 'true' || value === '1');
+const optionalSecret = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  z.string().min(12).max(200).optional(),
+);
 
 const envSchema = z
   .object({
@@ -49,6 +53,7 @@ const envSchema = z
     MAX_BOTS_PER_USER: z.coerce.number().int().min(1).max(100).default(10),
     /** Per client IP. A classroom behind one NAT shares a single address. */
     REGISTRATIONS_PER_HOUR: z.coerce.number().int().min(1).max(10000).default(30),
+    SHARKEY_ADMIN_PASSWORD: optionalSecret,
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV !== 'production') return;
@@ -88,6 +93,7 @@ export interface Config {
   matchTickMs: number;
   maxBotsPerUser: number;
   registrationsPerHour: number;
+  sharkeyAdminPassword: string | undefined;
 }
 
 /** Settings that hold no secret, echoed back in configuration errors. */
@@ -142,5 +148,6 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
     matchTickMs: env.MATCH_TICK_MS,
     maxBotsPerUser: env.MAX_BOTS_PER_USER,
     registrationsPerHour: env.REGISTRATIONS_PER_HOUR,
+    sharkeyAdminPassword: env.SHARKEY_ADMIN_PASSWORD,
   };
 }

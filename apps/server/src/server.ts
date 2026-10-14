@@ -13,6 +13,7 @@ export async function createServer(context: AppContext, options: BuildAppOptions
   const arena = new Arena(context, io as unknown as Server, app.log);
   const matchmaker = new Matchmaker(context, arena, app.log);
   context.nudgeMatchmaker = () => matchmaker.nudge();
+  context.cancelMatch = (matchId) => arena.cancel(matchId);
   const rooms = createRealtime(app.server, context, arena, io, app.log);
 
   let closing: Promise<void> | null = null;

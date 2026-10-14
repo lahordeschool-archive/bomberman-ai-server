@@ -82,11 +82,14 @@ export const matchListQuery = paginationQuery.extend({
 export const idParam = z.object({ id: z.uuid() });
 export const versionParam = z.object({ id: z.uuid(), versionId: z.uuid() });
 
+export type UserRole = 'player' | 'moderator' | 'admin';
+
 export interface PublicUser {
   id: string;
   username: string;
   displayName: string;
   createdAt: string;
+  role: UserRole;
 }
 
 export interface SessionResponse {
@@ -147,8 +150,9 @@ export interface MatchParticipantSummary {
 
 export interface MatchSummary {
   id: string;
-  kind: 'ranked' | 'casual';
+  kind: 'ranked' | 'casual' | 'tournament';
   status: 'running' | 'completed' | 'aborted';
+  tournament: { id: string; slug: string; name: string } | null;
   startedAt: string;
   endedAt: string | null;
   endTick: number | null;
@@ -169,6 +173,84 @@ export interface ReplayResponse {
 export interface RankedStatus {
   queue: { botId: string; botName: string; enqueuedAt: string }[];
   queueLength: number;
+  liveMatches: MatchSummary[];
+}
+
+export interface Achievement {
+  slug: string;
+  title: string;
+  description: string;
+  icon: string;
+  earnedAt: string;
+}
+
+export interface TournamentStanding {
+  rank: number;
+  botId: string;
+  botName: string;
+  owner: { username: string; displayName: string };
+  games: number;
+  wins: number;
+  points: number;
+  activeVersion: number;
+}
+
+export interface TournamentSummary {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  startsAt: string;
+  endsAt: string;
+  state: 'upcoming' | 'active' | 'finished' | 'cancelled';
+  entrants: number;
+}
+
+export interface TournamentDetail extends TournamentSummary {
+  standings: TournamentStanding[];
+}
+
+export const createTournamentBody = z
+  .object({
+    name: z.string().trim().min(3).max(80),
+    slug: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(/^[a-z0-9-]{3,48}$/),
+    description: z.string().trim().max(1000).default(''),
+    startsAt: z.iso.datetime(),
+    endsAt: z.iso.datetime(),
+  })
+  .refine((value) => new Date(value.endsAt) > new Date(value.startsAt), {
+    message: 'The tournament must end after it starts.',
+    path: ['endsAt'],
+  });
+
+export const tournamentSlugParam = z.object({
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9-]{3,48}$/),
+});
+
+export const tournamentRegistrationBody = z.object({ botId: z.uuid() });
+
+export const updateRoleBody = z.object({
+  role: z.enum(['player', 'moderator', 'admin']),
+});
+
+export interface AdminOverview {
+  counts: { users: number; bots: number; liveMatches: number; tournaments: number };
+  users: PublicUser[];
+  audit: {
+    id: string;
+    actor: string | null;
+    action: string;
+    detail: Record<string, unknown> | null;
+    createdAt: string;
+  }[];
   liveMatches: MatchSummary[];
 }
 

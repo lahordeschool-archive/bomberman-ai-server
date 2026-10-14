@@ -4,6 +4,7 @@ import { encodeIntent } from '@bomberman/protocol';
 import type { Queryable } from '../db/database.ts';
 import { iso, isoOrNull } from '../db/rows.ts';
 import { multiplayerElo } from '../ratings/elo.ts';
+import { awardMatchAchievements } from './achievements.ts';
 import { DEFAULT_RATING } from './bots.ts';
 
 export interface NewParticipant {
@@ -16,7 +17,8 @@ export interface NewParticipant {
 }
 
 export interface NewMatch {
-  kind: 'ranked' | 'casual';
+  kind: 'ranked' | 'casual' | 'tournament';
+  tournamentId?: string;
   engineVersion: number;
   sdkVersion: number;
   seed: number;
@@ -26,8 +28,9 @@ export interface NewMatch {
 
 export async function insertMatch(db: Queryable, match: NewMatch): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
-    `insert into matches (kind, status, engine_version, sdk_version, seed, player_count, settings, rated)
-     values ($1, 'running', $2, $3, $4, $5, $6, $7) returning id`,
+    `insert into matches
+       (kind, status, engine_version, sdk_version, seed, player_count, settings, rated, tournament_id)
+     values ($1, 'running', $2, $3, $4, $5, $6, $7, $8) returning id`,
     [
       match.kind,
       match.engineVersion,
@@ -36,6 +39,7 @@ export async function insertMatch(db: Queryable, match: NewMatch): Promise<strin
       match.participants.length,
       JSON.stringify(match.settings),
       match.kind === 'ranked',
+      match.tournamentId ?? null,
     ],
   );
   const id = rows[0]!.id;
@@ -82,10 +86,10 @@ export async function completeMatch(
   outcome: { result: MatchResult; intents: RecordedIntent[]; finalHash: string },
 ): Promise<void> {
   const { result, intents, finalHash } = outcome;
-  const { rows } = await tx.query<{ rated: boolean }>(
+  const { rows } = await tx.query<{ rated: boolean; tournament_id: string | null }>(
     `update matches set status = 'completed', ended_at = now(), end_tick = $2, end_reason = $3,
        winner_slot = $4, final_hash = $5
-     where id = $1 and status = 'running' returning rated`,
+     where id = $1 and status = 'running' returning rated, tournament_id`,
     [id, result.endTick, result.reason, result.winnerId, finalHash],
   );
   if (!rows[0]) throw new Error(`Match ${id} is not running`);
@@ -124,6 +128,37 @@ export async function completeMatch(
   }
 
   if (rows[0].rated) await applyRatings(tx, id);
+  const tournamentId = rows[0].tournament_id;
+  if (tournamentId) {
+    for (const player of result.players) {
+      const participant = await tx.query<{ bot_id: string | null }>(
+        'select bot_id from match_participants where match_id = $1 and slot = $2',
+        [id, player.playerId],
+      );
+      const botId = participant.rows[0]?.bot_id;
+      if (botId) {
+        await tx.query(
+          `update tournament_registrations
+           set games = games + 1, wins = wins + $3, points = points + $4
+           where tournament_id = $1 and bot_id = $2`,
+          [
+            tournamentId,
+            botId,
+            player.playerId === result.winnerId ? 1 : 0,
+            result.players.length - player.placement,
+          ],
+        );
+      }
+    }
+  }
+  const users = await tx.query<{ user_id: string }>(
+    'select distinct user_id from match_participants where match_id = $1 and user_id is not null',
+    [id],
+  );
+  await awardMatchAchievements(
+    tx,
+    users.rows.map((row) => row.user_id),
+  );
 }
 
 /** Updates ratings for one completed ranked match from its stored placements. */
@@ -176,12 +211,15 @@ export async function rebuildRatings(tx: Queryable): Promise<number> {
 
 interface MatchRow {
   id: string;
-  kind: 'ranked' | 'casual';
+  kind: 'ranked' | 'casual' | 'tournament';
   status: 'running' | 'completed' | 'aborted';
   started_at: Date;
   ended_at: Date | null;
   end_tick: number | null;
   winner_slot: number | null;
+  tournament_id: string | null;
+  tournament_slug: string | null;
+  tournament_name: string | null;
 }
 
 interface ParticipantRow {
@@ -244,15 +282,20 @@ async function attachParticipants(db: Queryable, matches: MatchRow[]): Promise<M
     endedAt: isoOrNull(match.ended_at),
     endTick: match.end_tick,
     winnerSlot: match.winner_slot,
+    tournament:
+      match.tournament_id && match.tournament_slug && match.tournament_name
+        ? { id: match.tournament_id, slug: match.tournament_slug, name: match.tournament_name }
+        : null,
     participants: byMatch.get(match.id) ?? [],
   }));
 }
 
-const MATCH_COLUMNS = 'm.id, m.kind, m.status, m.started_at, m.ended_at, m.end_tick, m.winner_slot';
+const MATCH_COLUMNS = `m.id, m.kind, m.status, m.started_at, m.ended_at, m.end_tick, m.winner_slot,
+  m.tournament_id, t.slug as tournament_slug, t.name as tournament_name`;
 
 export async function getMatchSummary(db: Queryable, id: string): Promise<MatchSummary | null> {
   const { rows } = await db.query<MatchRow>(
-    `select ${MATCH_COLUMNS} from matches m where m.id = $1`,
+    `select ${MATCH_COLUMNS} from matches m left join tournaments t on t.id = m.tournament_id where m.id = $1`,
     [id],
   );
   const [summary] = await attachParticipants(db, rows);
@@ -294,7 +337,8 @@ export async function listMatches(
       ? 'm.started_at desc'
       : 'm.ended_at desc nulls last, m.started_at desc';
   const { rows } = await db.query<MatchRow>(
-    `select ${MATCH_COLUMNS} from matches m where ${where} order by ${order}
+    `select ${MATCH_COLUMNS} from matches m left join tournaments t on t.id = m.tournament_id
+     where ${where} order by ${order}
      limit $${params.length + 1} offset $${params.length + 2}`,
     [...params, filter.limit, filter.offset],
   );

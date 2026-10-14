@@ -27,7 +27,8 @@ interface LiveMatch {
 }
 
 export interface StartOptions {
-  kind: 'ranked' | 'casual';
+  kind: 'ranked' | 'casual' | 'tournament';
+  tournamentId?: string;
   /** Bot seeds derive from this; random when omitted. */
   seed?: number;
   participants: ArenaParticipant[];
@@ -60,7 +61,7 @@ export class Arena {
     return this.live.size;
   }
 
-  runningCount(kind: 'ranked' | 'casual'): number {
+  runningCount(kind: 'ranked' | 'casual' | 'tournament'): number {
     let count = 0;
     for (const match of this.live.values()) if (match.init.kind === kind) count++;
     return count;
@@ -90,6 +91,7 @@ export class Arena {
     try {
       matchId = await insertMatch(this.context.db, {
         kind: options.kind,
+        tournamentId: options.tournamentId,
         engineVersion: state.engineVersion,
         sdkVersion: SDK_VERSION,
         seed,
@@ -180,6 +182,15 @@ export class Arena {
       }
     })();
     return { matchId, done: entry.done };
+  }
+
+  /** Cancels one live match and waits until its controllers and database state are settled. */
+  async cancel(matchId: string): Promise<boolean> {
+    const match = this.live.get(matchId);
+    if (!match) return false;
+    match.abort.abort();
+    await match.done;
+    return true;
   }
 
   /** Stops every running match; unfinished matches are recorded as aborted. */

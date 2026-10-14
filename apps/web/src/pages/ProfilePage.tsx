@@ -1,5 +1,5 @@
-import type { BotSummary, MatchSummary, PublicUser } from '@bomberman/protocol';
-import { Robot } from '@phosphor-icons/react';
+import type { Achievement, BotSummary, MatchSummary, PublicUser } from '@bomberman/protocol';
+import { Medal, Robot } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 import { MatchList } from '../components/MatchList.tsx';
 import {
@@ -15,7 +15,11 @@ import { Link } from '../lib/router.tsx';
 import { NotFoundPage } from './NotFoundPage.tsx';
 
 export function ProfilePage({ username }: { username: string }) {
-  const [profile, setProfile] = useState<{ user: PublicUser; bots: BotSummary[] } | null>(null);
+  const [profile, setProfile] = useState<{
+    user: PublicUser;
+    bots: BotSummary[];
+    achievements: Achievement[];
+  } | null>(null);
   const [matches, setMatches] = useState<MatchSummary[] | null>(null);
   const [error, setError] = useState<Error | null>(null);
 
@@ -51,6 +55,22 @@ export function ProfilePage({ username }: { username: string }) {
           </p>
         </div>
       </header>
+      {profile.achievements.length > 0 ? (
+        <Card>
+          <h2>Achievements</h2>
+          <ul className="achievement-list">
+            {profile.achievements.map((achievement) => (
+              <li key={achievement.slug} title={achievement.description}>
+                <Medal aria-hidden />
+                <span>
+                  <strong>{achievement.title}</strong>
+                  <small className="muted">{achievement.description}</small>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
       <div className="dashboard-grid">
         <Card>
           <h2>Bots</h2>

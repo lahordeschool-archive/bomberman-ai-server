@@ -9,6 +9,11 @@ import type {
   RankedStatus,
   ReplayResponse,
   SessionResponse,
+  Achievement,
+  AdminOverview,
+  TournamentDetail,
+  TournamentSummary,
+  UserRole,
 } from '@bomberman/protocol';
 
 let csrfToken: string | null = null;
@@ -96,5 +101,29 @@ export const api = {
   match: (id: string) => request<MatchSummary>('GET', `/api/matches/${id}`),
   replay: (id: string) => request<ReplayResponse>('GET', `/api/matches/${id}/replay`),
   profile: (username: string) =>
-    request<{ user: PublicUser; bots: BotSummary[] }>('GET', `/api/users/${username}`),
+    request<{ user: PublicUser; bots: BotSummary[]; achievements: Achievement[] }>(
+      'GET',
+      `/api/users/${username}`,
+    ),
+  tournaments: () => request<{ tournaments: TournamentSummary[] }>('GET', '/api/tournaments'),
+  tournament: (slug: string) =>
+    request<TournamentDetail>('GET', `/api/tournaments/${encodeURIComponent(slug)}`),
+  registerTournament: (slug: string, botId: string) =>
+    request<TournamentDetail>('POST', `/api/tournaments/${encodeURIComponent(slug)}/registration`, {
+      botId,
+    }),
+  unregisterTournament: (slug: string) =>
+    request<void>('DELETE', `/api/tournaments/${encodeURIComponent(slug)}/registration`),
+  adminOverview: () => request<AdminOverview>('GET', '/api/admin'),
+  cancelMatch: (id: string) => request<{ ok: true }>('POST', `/api/admin/matches/${id}/cancel`),
+  updateUserRole: (id: string, role: UserRole) =>
+    request<PublicUser>('PATCH', `/api/admin/users/${id}/role`, { role }),
+  createTournament: (body: {
+    name: string;
+    slug: string;
+    description: string;
+    startsAt: string;
+    endsAt: string;
+  }) => request<TournamentDetail>('POST', '/api/admin/tournaments', body),
+  cancelTournament: (id: string) => request<void>('POST', `/api/admin/tournaments/${id}/cancel`),
 };

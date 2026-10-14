@@ -39,7 +39,7 @@ export interface MatchParticipantInfo {
 
 export interface MatchInit {
   matchId: string;
-  kind: 'ranked' | 'casual';
+  kind: 'ranked' | 'casual' | 'tournament';
   participants: MatchParticipantInfo[];
   /** The match ends on a timeout when the snapshot tick reaches this. */
   maxTicks: number;

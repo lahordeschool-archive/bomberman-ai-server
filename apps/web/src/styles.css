@@ -1244,8 +1244,81 @@ a.match-row:hover {
 .verify.bad {
   color: var(--danger);
 }
+
+/* Tournaments, achievements, and operations */
+.card-grid,
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+.stat-value {
+  display: block;
+  font-size: 32px;
+}
+.achievement-list,
+.admin-list,
+.audit-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.achievement-list {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.achievement-list li,
+.admin-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-lg);
+}
+.achievement-list li {
+  justify-content: flex-start;
+}
+.achievement-list small,
+.audit-list span {
+  display: block;
+}
+.audit-list li {
+  padding-block: var(--space-2);
+  border-bottom: 1px solid var(--surface-3);
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.table-scroll {
+  overflow-x: auto;
+}
+.table-scroll table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table-scroll th,
+.table-scroll td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--surface-3);
+  text-align: left;
+}
+.badge-active {
+  color: var(--success);
+}
+.badge-cancelled {
+  color: var(--danger);
+}
 @media (max-width: 900px) {
   .match-layout {
+    grid-template-columns: 1fr;
+  }
+  .form-grid {
     grid-template-columns: 1fr;
   }
 }
