@@ -42,6 +42,8 @@ What players can do:
 - Play casual rooms with friends (share a 6 letter code, empty seats go to house bots). Casual results never touch ratings.
 - Queue for ranked, watch any live match from the Matches page, and replay finished ones with in-browser verification.
 - Browse the leaderboard, player profiles, and bot pages, read public source, and copy it into a new bot.
+- Enter time-limited tournaments and keep improving the participating bot while the event runs.
+- Earn achievements displayed as badges on player profiles.
 
 ## Checks
 
@@ -86,6 +88,11 @@ and music are not licensed for public distribution.
 
 Deliberately minimal: a username and a password (Argon2id), opaque session cookies,
 CSRF tokens on every state change, and rate limited login. No email, no OAuth.
+
+The reserved `Sharkey` account is the initial administrator. Set
+`SHARKEY_ADMIN_PASSWORD` (12+ characters) to enable it; the bootstrap never overwrites
+a password changed through the application. Administrators can assign moderator
+roles, create tournaments, and manage live matches.
 
 ## License
 

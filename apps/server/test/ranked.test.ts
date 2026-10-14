@@ -137,6 +137,65 @@ describe('ranked matches', () => {
   });
 });
 
+describe('tournament matches', () => {
+  it('uses a newly saved active version in the next tournament match without changing Elo', async () => {
+    const client = new TestClient(server.app);
+    const user = await client.register('tournament_runner');
+    const bot = await client.request('POST', '/api/bots', { name: 'Live Iteration' });
+    const cautious = SAMPLE_BOTS.find((sample) => sample.slug === 'cautious-bomber')!;
+    await client.request('POST', `/api/bots/${bot.body.id}/versions`, {
+      source: cautious.source,
+    });
+    const tournament = await context.db.query<{ id: string }>(
+      `insert into tournaments (slug, name, starts_at, ends_at, created_by)
+       values ('live-iteration', 'Live Iteration', now() - interval '1 minute',
+               now() + interval '1 hour', $1) returning id`,
+      [user.id],
+    );
+    await client.request('POST', '/api/tournaments/live-iteration/registration', {
+      botId: bot.body.id,
+    });
+
+    const first = await waitFor(async () => {
+      const response = await client.request('GET', '/api/matches/live');
+      return response.body.matches.find(
+        (match: { kind: string; tournament: { slug: string } | null }) =>
+          match.kind === 'tournament' && match.tournament?.slug === 'live-iteration',
+      );
+    });
+    await client.request('POST', `/api/bots/${bot.body.id}/versions`, {
+      source: `${cautious.source}\n// improved during the tournament`,
+    });
+    await waitFor(async () => {
+      const response = await client.request('GET', `/api/matches/${first.id}`);
+      return response.body.status === 'completed' ? response.body : null;
+    });
+
+    const second = await waitFor(async () => {
+      const response = await client.request('GET', '/api/matches/live');
+      return response.body.matches.find(
+        (match: { id: string; kind: string; tournament: { slug: string } | null }) =>
+          match.id !== first.id &&
+          match.kind === 'tournament' &&
+          match.tournament?.slug === 'live-iteration',
+      );
+    });
+    await context.db.query('update tournaments set ends_at = now() where id = $1', [
+      tournament.rows[0]!.id,
+    ]);
+    const completed = await waitFor(async () => {
+      const response = await client.request('GET', `/api/matches/${second.id}`);
+      return response.body.status === 'completed' ? response.body : null;
+    });
+    const mine = completed.participants.find(
+      (participant: { botId: string }) => participant.botId === bot.body.id,
+    );
+    expect(mine.botVersion).toBe(2);
+    expect(mine.ratingBefore).toBeNull();
+    expect(mine.ratingAfter).toBeNull();
+  });
+});
+
 describe('realtime', () => {
   it('rejects handshakes from foreign origins', async () => {
     const socket = openSocket(undefined, 'https://evil.test');

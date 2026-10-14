@@ -44,6 +44,17 @@ export function requireUser(request: FastifyRequest): SessionRecord {
   return request.session;
 }
 
+export function requireRole(
+  request: FastifyRequest,
+  minimum: 'moderator' | 'admin',
+): SessionRecord {
+  const session = requireUser(request);
+  const allowed =
+    session.user.role === 'admin' || (minimum === 'moderator' && session.user.role === 'moderator');
+  if (!allowed) throw forbidden('You do not have permission to manage the application.');
+  return session;
+}
+
 /**
  * Resolves the session cookie on every API request and enforces CSRF protection on
  * state changes: the Origin must be ours, and signed in requests must echo the

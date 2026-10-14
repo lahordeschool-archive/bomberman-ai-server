@@ -11,6 +11,11 @@ import {
   type QueueEntry,
 } from '../store/bots.ts';
 import type { Arena, ArenaParticipant } from './arena.ts';
+import {
+  activeTournamentQueue,
+  markTournamentMatched,
+  type TournamentQueueEntry,
+} from '../store/tournaments.ts';
 
 interface Pick {
   botId: string;
@@ -78,18 +83,60 @@ export class Matchmaker {
     const started: string[] = [];
     while (
       !this.stopped &&
-      this.arena.runningCount('ranked') < this.context.config.rankedConcurrency
+      this.arena.runningCount('ranked') + this.arena.runningCount('tournament') <
+        this.context.config.rankedConcurrency
     ) {
       const busy = this.arena.busyBotIds();
+      const tournamentQueue = (await activeTournamentQueue(this.context.db)).filter(
+        (entry) => !busy.has(entry.botId),
+      );
+      if (tournamentQueue.length > 0) {
+        const anchor = tournamentQueue[0]!;
+        const sameTournament = tournamentQueue
+          .filter((entry) => entry.tournamentId === anchor.tournamentId)
+          .slice(0, MAX_PLAYERS_PER_MATCH);
+        const matchId = await this.startMatch(
+          this.pickTournament(sameTournament),
+          'tournament',
+          anchor.tournamentId,
+        );
+        if (!matchId) break;
+        started.push(matchId);
+        continue;
+      }
       const queue = (await listQueue(this.context.db, 200)).filter(
         (entry) => !busy.has(entry.botId),
       );
       if (queue.length === 0) break;
-      const matchId = await this.startMatch(this.pick(queue));
+      const matchId = await this.startMatch(this.pick(queue), 'ranked');
       if (!matchId) break;
       started.push(matchId);
     }
     return started;
+  }
+
+  private pickTournament(queue: TournamentQueueEntry[]): Pick[] {
+    const picks: Pick[] = queue.map((entry) => ({
+      botId: entry.botId,
+      versionId: entry.versionId,
+      name: entry.botName,
+      owner: '',
+      kind: 'ranked',
+      ownerId: entry.ownerId,
+    }));
+    const house = [...this.context.house];
+    while (picks.length < MAX_PLAYERS_PER_MATCH && house.length > 0) {
+      const [pick] = house.splice(Math.floor(Math.random() * house.length), 1);
+      picks.push({
+        botId: pick!.botId,
+        versionId: pick!.versionId,
+        name: pick!.name,
+        owner: 'House',
+        kind: 'house',
+        ownerId: null,
+      });
+    }
+    return picks;
   }
 
   private pick(queue: QueueEntry[]): Pick[] {
@@ -120,7 +167,11 @@ export class Matchmaker {
     return picks;
   }
 
-  private async startMatch(picks: Pick[]): Promise<string | null> {
+  private async startMatch(
+    picks: Pick[],
+    kind: 'ranked' | 'tournament',
+    tournamentId?: string,
+  ): Promise<string | null> {
     const { db, executor } = this.context;
     const sources = await getVersionSources(
       db,
@@ -175,12 +226,15 @@ export class Matchmaker {
       throw error;
     }
 
-    await markMatched(
-      db,
-      picks.filter((pick) => pick.kind === 'ranked').map((pick) => pick.botId),
-    );
+    const playerBotIds = picks.filter((pick) => pick.kind === 'ranked').map((pick) => pick.botId);
+    if (kind === 'tournament' && tournamentId) {
+      await markTournamentMatched(db, tournamentId, playerBotIds);
+    } else {
+      await markMatched(db, playerBotIds);
+    }
     const { matchId } = await this.arena.start({
-      kind: 'ranked',
+      kind,
+      tournamentId,
       seed: matchSeed,
       participants,
       decisionTimeoutMs: DECISION_BUDGET_MS,
