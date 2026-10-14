@@ -53,43 +53,48 @@ export function LeaderboardPage() {
           </EmptyState>
         ) : (
           <>
-            <table className="table leaderboard">
-              <thead>
-                <tr>
-                  <th scope="col">Rank</th>
-                  <th scope="col">Bot</th>
-                  <th scope="col">Owner</th>
-                  <th scope="col">Rating</th>
-                  <th scope="col">Games</th>
-                  <th scope="col">Wins</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map((entry) => (
-                  <tr
-                    key={entry.botId}
-                    className={entry.owner.username === user?.username ? 'is-mine' : undefined}
-                  >
-                    <td className="mono">{entry.rank}</td>
-                    <td>
-                      <Link to={`/bots/${entry.botId}`}>
-                        <strong>{entry.botName}</strong>
-                      </Link>
-                    </td>
-                    <td>
-                      {entry.owner.isHouse ? (
-                        <span className="badge">House</span>
-                      ) : (
-                        <Link to={`/u/${entry.owner.username}`}>{entry.owner.displayName}</Link>
-                      )}
-                    </td>
-                    <td className="mono">{formatRating(entry.rating)}</td>
-                    <td className="mono">{entry.games}</td>
-                    <td className="mono">{entry.wins}</td>
+            <div className="table-scroll" tabIndex={0} aria-label="Leaderboard standings">
+              <table className="table leaderboard">
+                <thead>
+                  <tr>
+                    <th scope="col">Rank</th>
+                    <th scope="col">Bot</th>
+                    <th scope="col">Owner</th>
+                    <th scope="col">Rating</th>
+                    <th scope="col">Games</th>
+                    <th scope="col">Wins</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {entries.map((entry) => (
+                    <tr
+                      key={entry.botId}
+                      className={entry.owner.username === user?.username ? 'is-mine' : undefined}
+                    >
+                      <td className="mono">{entry.rank}</td>
+                      <td>
+                        <Link to={`/bots/${entry.botId}`}>
+                          <strong>{entry.botName}</strong>
+                        </Link>
+                        <small className="mobile-table-meta">
+                          {entry.games} games · {entry.wins} wins
+                        </small>
+                      </td>
+                      <td>
+                        {entry.owner.isHouse ? (
+                          <span className="badge">House</span>
+                        ) : (
+                          <Link to={`/u/${entry.owner.username}`}>{entry.owner.displayName}</Link>
+                        )}
+                      </td>
+                      <td className="mono">{formatRating(entry.rating)}</td>
+                      <td className="mono">{entry.games}</td>
+                      <td className="mono">{entry.wins}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <div className="pager">
               <Button onClick={() => setOffset(Math.max(0, offset - PAGE))} disabled={offset === 0}>
                 Previous

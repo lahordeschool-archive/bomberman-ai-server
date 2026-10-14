@@ -248,6 +248,13 @@ small {
   .main {
     padding: var(--space-5) var(--space-4) var(--space-8);
   }
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .card {
+    min-width: 0;
+    padding: var(--space-4);
+  }
 }
 
 @keyframes rise {
@@ -635,6 +642,14 @@ a.match-row:hover {
   font-size: 14px;
   line-height: 20px;
 }
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+.table-scroll:focus-visible {
+  outline-offset: 2px;
+}
 .table th {
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--surface-3);
@@ -648,6 +663,59 @@ a.match-row:hover {
 }
 .table tr.is-mine td {
   background: rgb(255 138 61 / 0.07);
+}
+.mobile-table-meta {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .leaderboard,
+  .match-result {
+    table-layout: fixed;
+  }
+  .leaderboard th,
+  .leaderboard td,
+  .match-result th,
+  .match-result td {
+    padding-inline: var(--space-2);
+  }
+  .leaderboard th:nth-child(1) {
+    width: 42px;
+  }
+  .leaderboard th:nth-child(4) {
+    width: 60px;
+  }
+  .leaderboard th:nth-child(5),
+  .leaderboard th:nth-child(6),
+  .leaderboard td:nth-child(5),
+  .leaderboard td:nth-child(6),
+  .match-result th:nth-child(3),
+  .match-result th:nth-child(4),
+  .match-result td:nth-child(3),
+  .match-result td:nth-child(4) {
+    display: none;
+  }
+  .leaderboard a,
+  .match-result a {
+    overflow-wrap: anywhere;
+  }
+  .leaderboard .badge {
+    margin-left: 0;
+  }
+  .match-result th:nth-child(1) {
+    width: 50px;
+  }
+  .match-result th:nth-child(5) {
+    width: 86px;
+  }
+  .mobile-table-meta {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-family: var(--font);
+    font-size: 11px;
+    line-height: 16px;
+  }
 }
 
 .auth-page {
