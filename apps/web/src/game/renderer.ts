@@ -315,7 +315,7 @@ class ArenaScene extends Phaser.Scene {
 
   private createThemeTextures(): void {
     const make = (key: string, draw: (graphics: Phaser.GameObjects.Graphics) => void) => {
-      const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+      const graphics = this.make.graphics({ x: 0, y: 0 });
       draw(graphics);
       graphics.generateTexture(key, TILE_SIZE, TILE_SIZE);
       graphics.destroy();
