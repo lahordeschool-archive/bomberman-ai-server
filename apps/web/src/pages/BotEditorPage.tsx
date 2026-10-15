@@ -7,12 +7,13 @@ import {
   type BotLogLine,
 } from '@bomberman/bot-sdk';
 import { DEFAULT_MAX_TICKS } from '@bomberman/game-engine';
-import type { BotDetail, BotSummary, RankedStatus } from '@bomberman/protocol';
+import type { BotDetail, BotSummary, RankedStatus, SkinSlug, SkinStore } from '@bomberman/protocol';
 import {
   ArrowCounterClockwise,
   ArrowsIn,
   ArrowsOut,
   CloudArrowUp,
+  Code,
   Globe,
   PencilSimple,
   Play,
@@ -20,6 +21,7 @@ import {
   SpeakerSlash,
   Stop,
   Trophy,
+  TShirt,
 } from '@phosphor-icons/react';
 import {
   type FormEvent,
@@ -62,6 +64,7 @@ interface SavedCode {
   botId: string;
   versionId: string;
   label: string;
+  skin: SkinSlug | null;
 }
 
 const savedKey = (botId: string, versionId: string) => `v:${botId}:${versionId}`;
@@ -81,7 +84,8 @@ function drawOpponents(slugs: readonly string[]): string[] {
 const MAX_CONSOLE_LINES = 300;
 const EXPANDED_KEY = 'bomber:editor-expanded';
 
-type Panel = 'test' | 'online' | 'ranked';
+type Panel = 'online' | 'ranked';
+type ConfigTab = 'code' | 'skins' | 'play';
 
 function draftKey(botId: string) {
   return `bomber:draft:${botId}`;
@@ -103,7 +107,8 @@ export default function BotEditorPage({ botId }: { botId: string }) {
   const [lines, setLines] = useState<ConsoleLine[]>([]);
   const [renderer, setRenderer] = useState<ArenaRenderer | null>(null);
   const [muted, setMuted] = useState(true);
-  const [panel, setPanel] = useState<Panel>('test');
+  const [panel, setPanel] = useState<Panel>('ranked');
+  const [configTab, setConfigTab] = useState<ConfigTab>('code');
   const [opponents, setOpponents] = useState<string[]>([RANDOM, RANDOM, RANDOM]);
   const [drawn, setDrawn] = useState<string[] | null>(null);
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
@@ -118,6 +123,8 @@ export default function BotEditorPage({ botId }: { botId: string }) {
   const [ranked, setRanked] = useState<RankedStatus | null>(null);
   const [roomCode, setRoomCode] = useState('');
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [store, setStore] = useState<SkinStore | null>(null);
+  const [rankedOnSave, setRankedOnSave] = useState(true);
   const [expanded, setExpanded] = useState(() => localStorage.getItem(EXPANDED_KEY) === '1');
   const lineId = useRef(0);
   const sourceRef = useRef('');
@@ -219,12 +226,14 @@ export default function BotEditorPage({ botId }: { botId: string }) {
         botId,
         versionId: version.id,
         label: `${versionName(version)}${version.id === bot!.activeVersion?.id ? ' (active)' : ''}`,
+        skin: bot?.skin ?? null,
       })),
       others: otherBots.map((other) => ({
         key: savedKey(other.id, other.activeVersion!.id),
         botId: other.id,
         versionId: other.activeVersion!.id,
         label: `${other.name}: ${versionName(other.activeVersion!)}`,
+        skin: other.skin,
       })),
     }),
     [bot, botId, otherBots],
@@ -273,6 +282,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
       })
       .catch((failure: Error) => setLoadError(failure.message));
     api.rankedStatus().then(setRanked, () => undefined);
+    api.skinStore().then(setStore, () => undefined);
   }, [botId, refresh]);
 
   useEffect(() => {
@@ -296,11 +306,23 @@ export default function BotEditorPage({ botId }: { botId: string }) {
   const buildParticipants = useCallback(
     (slugs: readonly string[], cache: Record<string, string> = savedSources) => {
       const list = [
-        { name: bot?.name ?? 'Your bot', source: source ?? '', detail: 'Draft', events: botEvents },
+        {
+          name: bot?.name ?? 'Your bot',
+          source: source ?? '',
+          detail: 'Draft',
+          events: botEvents,
+          skin: bot?.skin,
+        },
       ];
       for (const slug of slugs) {
         if (slug === RANDOM) {
-          list.push({ name: 'Random house bot', source: '', detail: 'Drawn at start', events: {} });
+          list.push({
+            name: 'Random house bot',
+            source: '',
+            detail: 'Drawn at start',
+            events: {},
+            skin: null,
+          });
         } else if (isSaved(slug)) {
           const entry = findSaved(slug);
           if (entry) {
@@ -309,6 +331,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
               source: cache[slug] ?? '',
               detail: 'Saved version',
               events: {},
+              skin: entry.skin,
             });
           }
         } else {
@@ -319,6 +342,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
               source: sample.source,
               detail: 'Sample bot',
               events: {},
+              skin: null,
             });
         }
       }
@@ -409,12 +433,19 @@ export default function BotEditorPage({ botId }: { botId: string }) {
     setActionError(null);
     setNotice(null);
     try {
-      const version = await api.submitVersion(botId, { source, visibility, label });
+      const version = await api.submitVersion(botId, {
+        source,
+        visibility,
+        label,
+        ranked: rankedOnSave,
+      });
       await refresh();
       rememberLoaded(savedKey(botId, version.id));
       setSaveLabel(null);
       setNotice(
-        `Saved “${label}” as version ${version.version}. It is now the version used for ranked play.`,
+        `Saved “${label}” as version ${version.version}.${
+          rankedOnSave ? ' Your bot is queued for ranked play.' : ''
+        }`,
       );
     } catch (failure) {
       setSaveError((failure as Error).message);
@@ -429,6 +460,15 @@ export default function BotEditorPage({ botId }: { botId: string }) {
       const next = bot?.queued ? await api.dequeue(botId) : await api.enqueue(botId);
       setRanked(next);
       await refresh();
+    } catch (failure) {
+      setActionError((failure as Error).message);
+    }
+  }
+
+  async function equipSkin(skin: SkinSlug | null) {
+    setActionError(null);
+    try {
+      setBot(await api.equipSkin(botId, skin));
     } catch (failure) {
       setActionError((failure as Error).message);
     }
@@ -530,8 +570,30 @@ export default function BotEditorPage({ botId }: { botId: string }) {
         </div>
       </header>
 
-      <div className="editor-layout" ref={layoutRef}>
-        <div className="editor-column">
+      <div className="tabs editor-main-tabs" role="tablist" aria-label="Bot configuration">
+        {(
+          [
+            ['code', 'Code', <Code key="code" />],
+            ['skins', 'Skins', <TShirt key="skins" />],
+            ['play', 'Play', <Play key="play" />],
+          ] as const
+        ).map(([id, label, icon]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={configTab === id}
+            className="tab"
+            onClick={() => setConfigTab(id)}
+          >
+            {icon}
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="editor-layout editor-tab-content" ref={layoutRef}>
+        <div className="editor-column" hidden={configTab !== 'code'}>
           <div className="editor-toolbar">
             <Button
               variant="primary"
@@ -624,7 +686,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
           <ConsolePanel lines={lines} onClear={() => setLines([])} />
         </div>
 
-        <div className="arena-column">
+        <div className="arena-column" hidden={configTab !== 'code'}>
           <div className="editor-header-meta mono">
             {bot?.activeVersion ? (
               <span>v{bot.activeVersion.version}</span>
@@ -656,13 +718,110 @@ export default function BotEditorPage({ botId }: { botId: string }) {
             maxTicks={DEFAULT_MAX_TICKS}
             mode={running || casual.match ? 'live' : 'idle'}
           />
+          <Card className="panel local-test-panel">
+            <h2>Test match</h2>
+            <p className="muted">
+              Runs entirely in your browser. Your draft plays as {participants[0]!.name}.
+            </p>
+            {[0, 1, 2].map((index) => (
+              <label key={index} className="select-field">
+                Opponent {index + 1}
+                <select
+                  value={opponents[index] ?? ''}
+                  onChange={(event) => {
+                    const next = [...opponents];
+                    if (event.target.value) next[index] = event.target.value;
+                    else next.splice(index, 1);
+                    setOpponents(next.filter(Boolean));
+                    setDrawn(null);
+                  }}
+                  disabled={index > opponents.length}
+                >
+                  {index > 0 ? <option value="">None</option> : null}
+                  <option value={RANDOM}>Random house bot</option>
+                  <optgroup label="House bots">
+                    {SAMPLE_BOTS.map((sample) => (
+                      <option key={sample.slug} value={sample.slug}>
+                        {sample.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                  {savedCode.own.length + savedCode.others.length > 0 ? (
+                    <optgroup label="Your saved versions">
+                      {[...savedCode.own, ...savedCode.others].map((entry) => (
+                        <option key={entry.key} value={entry.key}>
+                          {entry.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null}
+                </select>
+              </label>
+            ))}
+          </Card>
+        </div>
 
+        <div className="skin-config" hidden={configTab !== 'skins'}>
+          <Card>
+            <div className="card-header">
+              <div>
+                <h2>Bot skin</h2>
+                <p className="muted">
+                  The arena automatically uses a different colour variant when players share a skin.
+                </p>
+              </div>
+              <Link to={`/u/${user?.username ?? ''}`}>Open store</Link>
+            </div>
+            <div className="skin-grid skin-grid-compact">
+              <button
+                type="button"
+                className={`skin-card skin-choice ${bot?.skin === null ? 'is-selected' : ''}`}
+                onClick={() => void equipSkin(null)}
+              >
+                <div
+                  className="skin-preview"
+                  style={{ backgroundImage: 'url(/game/sprites/snes_white.png)' }}
+                />
+                <strong>Classic</strong>
+                <small className="muted">Included</small>
+              </button>
+              {store?.skins
+                .filter((skin) => store.owned.includes(skin.slug as SkinSlug))
+                .map((skin) => (
+                  <button
+                    type="button"
+                    key={skin.slug}
+                    className={`skin-card skin-choice ${
+                      bot?.skin === skin.slug ? 'is-selected' : ''
+                    }`}
+                    onClick={() => void equipSkin(skin.slug as SkinSlug)}
+                  >
+                    <div
+                      className="skin-preview"
+                      style={{
+                        backgroundImage: `url(/game/skins/${skin.slug}_white.png)`,
+                      }}
+                    />
+                    <strong>{skin.name}</strong>
+                    <small className="muted">
+                      {bot?.skin === skin.slug ? 'Equipped' : 'Equip'}
+                    </small>
+                  </button>
+                ))}
+            </div>
+            {store && store.owned.length === 0 ? (
+              <p className="muted">You have no custom skins yet. Visit your profile store.</p>
+            ) : null}
+            <ErrorMessage>{actionError}</ErrorMessage>
+          </Card>
+        </div>
+
+        <div className="play-config" hidden={configTab !== 'play'}>
           <div className="tabs" role="tablist" aria-label="Match modes">
             {(
               [
-                ['test', 'Local test', <Play key="i" />],
-                ['online', 'Online casual', <Globe key="i" />],
                 ['ranked', 'Ranked', <Trophy key="i" />],
+                ['online', 'Online casual', <Globe key="i" />],
               ] as const
             ).map(([id, label, icon]) => (
               <button
@@ -679,49 +838,6 @@ export default function BotEditorPage({ botId }: { botId: string }) {
             ))}
           </div>
 
-          {panel === 'test' ? (
-            <Card className="panel">
-              <p className="muted">
-                Runs entirely in your browser. Your draft plays as {participants[0]!.name}.
-              </p>
-              {[0, 1, 2].map((index) => (
-                <label key={index} className="select-field">
-                  Opponent {index + 1}
-                  <select
-                    value={opponents[index] ?? ''}
-                    onChange={(event) => {
-                      const next = [...opponents];
-                      if (event.target.value) next[index] = event.target.value;
-                      else next.splice(index, 1);
-                      setOpponents(next.filter(Boolean));
-                      setDrawn(null);
-                    }}
-                    disabled={index > opponents.length}
-                  >
-                    {index > 0 ? <option value="">None</option> : null}
-                    <option value={RANDOM}>Random house bot</option>
-                    <optgroup label="House bots">
-                      {SAMPLE_BOTS.map((sample) => (
-                        <option key={sample.slug} value={sample.slug}>
-                          {sample.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                    {savedCode.own.length + savedCode.others.length > 0 ? (
-                      <optgroup label="Your saved versions">
-                        {[...savedCode.own, ...savedCode.others].map((entry) => (
-                          <option key={entry.key} value={entry.key}>
-                            {entry.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ) : null}
-                  </select>
-                </label>
-              ))}
-            </Card>
-          ) : null}
-
           {panel === 'online' ? (
             <Card className="panel">
               <p className="muted">
@@ -732,7 +848,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
                 <div className="stack">
                   <Button
                     variant="primary"
-                    onClick={() => casual.create(bot?.name ?? 'Browser bot')}
+                    onClick={() => casual.create(bot?.name ?? 'Browser bot', botId)}
                   >
                     Create a room
                   </Button>
@@ -740,7 +856,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
                     className="inline-form"
                     onSubmit={(event) => {
                       event.preventDefault();
-                      void casual.join(roomCode, bot?.name ?? 'Browser bot');
+                      void casual.join(roomCode, bot?.name ?? 'Browser bot', botId);
                     }}
                   >
                     <label className="select-field">
@@ -900,6 +1016,19 @@ export default function BotEditorPage({ botId }: { botId: string }) {
               onChange={(event) => setVisibility(event.target.checked ? 'public' : 'private')}
             />
             Public source: anyone can read this version
+          </label>
+          <label className="checkbox ranked-save-toggle">
+            <input
+              type="checkbox"
+              checked={rankedOnSave}
+              onChange={(event) => setRankedOnSave(event.target.checked)}
+            />
+            <span>
+              <strong>Queue for ranked play</strong>
+              <small className="muted">
+                Enabled by default. Your newly saved version starts earning Elo and coins.
+              </small>
+            </span>
           </label>
           <ErrorMessage>{saveError}</ErrorMessage>
           <div className="modal-actions">

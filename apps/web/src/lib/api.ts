@@ -14,6 +14,8 @@ import type {
   TournamentDetail,
   TournamentSummary,
   UserRole,
+  SkinStore,
+  SkinSlug,
 } from '@bomberman/protocol';
 
 let csrfToken: string | null = null;
@@ -84,8 +86,15 @@ export const api = {
     request<BotVersionDetail>('GET', `/api/bots/${botId}/versions/${versionId}`),
   submitVersion: (
     botId: string,
-    body: { source: string; visibility: 'private' | 'public'; label: string },
+    body: {
+      source: string;
+      visibility: 'private' | 'public';
+      label: string;
+      ranked?: boolean;
+    },
   ) => request<BotVersionDetail>('POST', `/api/bots/${botId}/versions`, body),
+  equipSkin: (botId: string, skin: SkinSlug | null) =>
+    request<BotDetail>('PUT', `/api/bots/${botId}/skin`, { skin }),
   enqueue: (botId: string) => request<RankedStatus>('POST', `/api/bots/${botId}/ranked`),
   dequeue: (botId: string) => request<RankedStatus>('DELETE', `/api/bots/${botId}/ranked`),
 
@@ -105,6 +114,8 @@ export const api = {
       'GET',
       `/api/users/${username}`,
     ),
+  skinStore: () => request<SkinStore>('GET', '/api/store'),
+  purchaseSkin: (skin: SkinSlug) => request<SkinStore>('POST', '/api/store/purchases', { skin }),
   tournaments: () => request<{ tournaments: TournamentSummary[] }>('GET', '/api/tournaments'),
   tournament: (slug: string) =>
     request<TournamentDetail>('GET', `/api/tournaments/${encodeURIComponent(slug)}`),

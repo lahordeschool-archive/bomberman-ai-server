@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AppContext } from '../src/context.ts';
 import { DECISIVE_ELO_K, multiplayerElo } from '../src/ratings/elo.ts';
 import { completeMatch, insertMatch, rebuildRatings } from '../src/store/matches.ts';
+import { awardPositiveElo } from '../src/store/skins.ts';
 import { createTestApp, TestClient } from './helpers.ts';
 
 let app: FastifyInstance;
@@ -283,6 +284,12 @@ describe('bots and versions', () => {
     expect(left.body.queue.map((entry: { botId: string }) => entry.botId)).not.toContain(
       bot.body.id,
     );
+    await owner.request('POST', `/api/bots/${bot.body.id}/versions`, {
+      source: SAMPLE_BOTS[1]!.source,
+      ranked: true,
+    });
+    expect((await owner.request('GET', '/api/bots')).body.bots[0].queued).toBe(true);
+    await owner.request('DELETE', `/api/bots/${bot.body.id}/ranked`);
   });
 
   it('lists a public profile', async () => {
@@ -291,6 +298,55 @@ describe('bots and versions', () => {
     expect(profile.body.bots.map((bot: { name: string }) => bot.name).sort()).toEqual(
       SAMPLE_BOTS.map((sample) => sample.name).sort(),
     );
+  });
+
+  it('earns ranked coins, purchases skins, and equips them per bot', async () => {
+    const player = new TestClient(app);
+    const user = await player.register('skin_collector');
+    const bot = await player.request('POST', '/api/bots', { name: 'Well Dressed' });
+    const initial = await player.request('GET', '/api/store');
+    expect(initial.body.balance).toBe(0);
+    expect(initial.body.skins).toHaveLength(10);
+    expect(initial.body.skins.map((skin: { price: number }) => skin.price)).toEqual(
+      [...initial.body.skins]
+        .map((skin: { price: number }) => skin.price)
+        .sort((a: number, b: number) => a - b),
+    );
+    expect((await player.request('POST', '/api/store/purchases', { skin: 'ember' })).status).toBe(
+      409,
+    );
+
+    const matchId = await insertMatch(context.db, {
+      kind: 'ranked',
+      engineVersion: 1,
+      sdkVersion: 1,
+      seed: 8,
+      settings: { bombs: 1, flames: 2, speed: 1, maxTicks: 100 },
+      participants: [],
+    });
+    await context.db.transaction(async (tx) => {
+      expect(await awardPositiveElo(tx, user.id, matchId, 40)).toBe(200);
+      expect(await awardPositiveElo(tx, user.id, matchId, 40)).toBe(0);
+    });
+
+    const bought = await player.request('POST', '/api/store/purchases', { skin: 'ember' });
+    expect(bought.status).toBe(201);
+    expect(bought.body).toMatchObject({ balance: 50, earned: 200, owned: ['ember'] });
+    const equipped = await player.request('PUT', `/api/bots/${bot.body.id}/skin`, {
+      skin: 'ember',
+    });
+    expect(equipped).toMatchObject({ status: 200, body: { skin: 'ember' } });
+
+    const stranger = new TestClient(app);
+    await stranger.register('skin_stranger');
+    const strangerBot = await stranger.request('POST', '/api/bots', { name: 'Plain' });
+    expect(
+      (
+        await stranger.request('PUT', `/api/bots/${strangerBot.body.id}/skin`, {
+          skin: 'ember',
+        })
+      ).status,
+    ).toBe(403);
   });
 });
 

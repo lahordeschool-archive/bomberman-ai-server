@@ -1,10 +1,12 @@
 import type { Intent, MatchResult, Snapshot } from '@bomberman/game-engine';
 import { z } from 'zod';
+import type { SkinSlug } from './skins.ts';
 
 export const watchMatchPayload = z.object({ matchId: z.string().min(1).max(64) });
 
 export const casualCreatePayload = z.object({
   botName: z.string().trim().min(1).max(32).default('Browser bot'),
+  botId: z.uuid().optional(),
 });
 
 export const casualJoinPayload = z.object({
@@ -14,6 +16,7 @@ export const casualJoinPayload = z.object({
     .toUpperCase()
     .regex(/^[A-Z0-9]{6}$/),
   botName: z.string().trim().min(1).max(32).default('Browser bot'),
+  botId: z.uuid().optional(),
 });
 
 export const casualStartPayload = z.object({
@@ -35,6 +38,7 @@ export interface MatchParticipantInfo {
   name: string;
   owner: string | null;
   kind: 'ranked' | 'browser' | 'house';
+  skin: SkinSlug | null;
 }
 
 export interface MatchInit {

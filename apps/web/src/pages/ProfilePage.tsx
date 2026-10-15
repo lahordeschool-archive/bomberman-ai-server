@@ -1,5 +1,12 @@
-import type { Achievement, BotSummary, MatchSummary, PublicUser } from '@bomberman/protocol';
-import { Medal, Robot } from '@phosphor-icons/react';
+import type {
+  Achievement,
+  BotSummary,
+  MatchSummary,
+  PublicUser,
+  SkinSlug,
+  SkinStore,
+} from '@bomberman/protocol';
+import { Coins, Medal, Robot } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 import { MatchList } from '../components/MatchList.tsx';
 import {
@@ -9,12 +16,15 @@ import {
   formatDate,
   formatRating,
   Skeleton,
+  Button,
 } from '../components/ui.tsx';
 import { api, RequestError } from '../lib/api.ts';
 import { Link } from '../lib/router.tsx';
 import { NotFoundPage } from './NotFoundPage.tsx';
+import { useSession } from '../lib/session.tsx';
 
 export function ProfilePage({ username }: { username: string }) {
+  const { user: sessionUser } = useSession();
   const [profile, setProfile] = useState<{
     user: PublicUser;
     bots: BotSummary[];
@@ -22,6 +32,9 @@ export function ProfilePage({ username }: { username: string }) {
   } | null>(null);
   const [matches, setMatches] = useState<MatchSummary[] | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  const [store, setStore] = useState<SkinStore | null>(null);
+  const [storeError, setStoreError] = useState<string | null>(null);
+  const [buying, setBuying] = useState<SkinSlug | null>(null);
 
   useEffect(() => {
     setProfile(null);
@@ -32,6 +45,27 @@ export function ProfilePage({ username }: { username: string }) {
       () => setMatches([]),
     );
   }, [username]);
+
+  const isOwnProfile = sessionUser?.username === profile?.user.username;
+  useEffect(() => {
+    if (!isOwnProfile) {
+      setStore(null);
+      return;
+    }
+    api.skinStore().then(setStore, (failure: Error) => setStoreError(failure.message));
+  }, [isOwnProfile]);
+
+  async function buy(skin: SkinSlug) {
+    setBuying(skin);
+    setStoreError(null);
+    try {
+      setStore(await api.purchaseSkin(skin));
+    } catch (failure) {
+      setStoreError((failure as Error).message);
+    } finally {
+      setBuying(null);
+    }
+  }
 
   if (error instanceof RequestError && (error.status === 404 || error.status === 400)) {
     return <NotFoundPage />;
@@ -55,6 +89,56 @@ export function ProfilePage({ username }: { username: string }) {
           </p>
         </div>
       </header>
+      {isOwnProfile ? (
+        <Card className="skin-store">
+          <div className="card-header">
+            <div>
+              <h2>Skin store</h2>
+              <p className="muted">
+                Earn 5 coins for every positive Elo point in ranked matches. Skins belong to your
+                account and can be equipped on any bot.
+              </p>
+            </div>
+            <span className="coin-balance">
+              <Coins weight="fill" /> {store?.balance ?? 0} coins
+            </span>
+          </div>
+          <ErrorMessage>{storeError}</ErrorMessage>
+          {!store ? (
+            <Skeleton lines={2} />
+          ) : (
+            <div className="skin-grid">
+              {store.skins.map((skin) => {
+                const owned = store.owned.includes(skin.slug as SkinSlug);
+                return (
+                  <article className="skin-card" key={skin.slug}>
+                    <div
+                      className="skin-preview"
+                      role="img"
+                      aria-label={`${skin.name} skin preview`}
+                      style={{
+                        backgroundImage: `url(/game/skins/${skin.slug}_white.png)`,
+                      }}
+                    />
+                    <div>
+                      <strong>{skin.name}</strong>
+                      <small className="muted">{skin.description}</small>
+                    </div>
+                    <Button
+                      variant={owned ? 'secondary' : 'primary'}
+                      disabled={owned || store.balance < skin.price}
+                      busy={buying === skin.slug}
+                      onClick={() => void buy(skin.slug as SkinSlug)}
+                    >
+                      {owned ? 'Owned' : `${skin.price} coins`}
+                    </Button>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      ) : null}
       {profile.achievements.length > 0 ? (
         <Card>
           <h2>Achievements</h2>

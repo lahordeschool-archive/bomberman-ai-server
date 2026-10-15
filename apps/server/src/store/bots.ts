@@ -5,6 +5,7 @@ import type {
   BotSummary,
   BotVersionDetail,
   BotVersionSummary,
+  SkinSlug,
 } from '@bomberman/protocol';
 import type { Queryable } from '../db/database.ts';
 import { iso } from '../db/rows.ts';
@@ -26,6 +27,7 @@ interface BotSummaryRow {
   games: number | null;
   wins: number | null;
   queued: boolean;
+  skin_slug: SkinSlug | null;
   created_at: Date;
 }
 
@@ -42,7 +44,7 @@ export interface BotVersionRow {
 }
 
 const SUMMARY_SELECT = `
-  select b.id, b.name, b.owner_id, b.created_at, b.active_version_id,
+  select b.id, b.name, b.owner_id, b.created_at, b.active_version_id, b.skin_slug,
          u.username as owner_username, u.display_name as owner_display_name, u.is_house as owner_is_house,
          v.version as active_version, v.label as active_label, v.created_at as active_created_at,
          r.rating, r.games, r.wins,
@@ -75,6 +77,7 @@ function toSummary(row: BotSummaryRow): BotSummary {
         ? null
         : { rating: row.rating, games: row.games ?? 0, wins: row.wins ?? 0 },
     queued: row.queued,
+    skin: row.skin_slug,
     createdAt: iso(row.created_at),
   };
 }
@@ -226,6 +229,7 @@ export interface QueueEntry {
   rating: number;
   enqueuedAt: string;
   lastMatchedAt: string | null;
+  skin: SkinSlug | null;
 }
 
 /** Queued bots with a playable version, least recently matched first. */
@@ -238,8 +242,10 @@ export async function listQueue(db: Queryable, limit = 100): Promise<QueueEntry[
     rating: number | null;
     enqueued_at: Date;
     last_matched_at: Date | null;
+    skin_slug: SkinSlug | null;
   }>(
-    `select q.bot_id, b.name, b.owner_id, b.active_version_id, r.rating, q.enqueued_at, q.last_matched_at
+    `select q.bot_id, b.name, b.owner_id, b.active_version_id, b.skin_slug,
+            r.rating, q.enqueued_at, q.last_matched_at
      from ranked_queue q
      join bots b on b.id = q.bot_id and b.deleted_at is null and b.active_version_id is not null
      left join ratings r on r.bot_id = q.bot_id
@@ -255,6 +261,7 @@ export async function listQueue(db: Queryable, limit = 100): Promise<QueueEntry[
     rating: row.rating ?? DEFAULT_RATING,
     enqueuedAt: iso(row.enqueued_at),
     lastMatchedAt: row.last_matched_at ? iso(row.last_matched_at) : null,
+    skin: row.skin_slug,
   }));
 }
 

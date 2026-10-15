@@ -1,6 +1,8 @@
 import {
   createBotBody,
+  equipSkinBody,
   idParam,
+  isSkinSlug,
   type RankedStatus,
   submitVersionBody,
   updateBotBody,
@@ -26,6 +28,7 @@ import {
 } from '../../store/bots.ts';
 import { listMatches } from '../../store/matches.ts';
 import { recordAudit } from '../../store/users.ts';
+import { ownsSkin, setBotSkin } from '../../store/skins.ts';
 import { forbidden, HttpError, notFound } from '../errors.ts';
 import { requireUser } from '../session-plugin.ts';
 
@@ -106,6 +109,17 @@ export function registerBotRoutes(app: FastifyInstance, context: AppContext): vo
     return detail;
   });
 
+  app.put('/api/bots/:id/skin', async (request) => {
+    const { session, bot } = await ownedBot(request);
+    const { skin } = equipSkinBody.parse(request.body);
+    if (skin !== null && (!isSkinSlug(skin) || !(await ownsSkin(db, session.user.id, skin)))) {
+      throw new HttpError(403, 'skin_not_owned', 'Buy this skin before equipping it.');
+    }
+    await setBotSkin(db, bot.id, skin);
+    const { ownerId: _ownerId, ...detail } = (await getBotDetail(db, bot.id))!;
+    return detail;
+  });
+
   app.delete('/api/bots/:id', async (request, reply) => {
     const { session, bot } = await ownedBot(request);
     await db.transaction((tx) => deleteBot(tx, bot.id));
@@ -136,7 +150,7 @@ export function registerBotRoutes(app: FastifyInstance, context: AppContext): vo
     },
     async (request, reply) => {
       const { session, bot } = await ownedBot(request);
-      const { source, visibility, label } = submitVersionBody.parse(request.body);
+      const { source, visibility, label, ranked } = submitVersionBody.parse(request.body);
       const validation = await context.executor.validate(source);
       if (!validation.ok) {
         throw new HttpError(
@@ -145,9 +159,12 @@ export function registerBotRoutes(app: FastifyInstance, context: AppContext): vo
           `The sandbox rejected this version: ${validation.error}`,
         );
       }
-      const version = await db.transaction((tx) =>
-        addVersion(tx, bot.id, source, visibility, label),
-      );
+      const version = await db.transaction(async (tx) => {
+        const saved = await addVersion(tx, bot.id, source, visibility, label);
+        if (ranked) await enqueueBot(tx, bot.id);
+        return saved;
+      });
+      if (ranked) context.nudgeMatchmaker?.();
       await recordAudit(db, {
         userId: session.user.id,
         action: 'bot_version_submitted',

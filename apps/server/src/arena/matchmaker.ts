@@ -2,6 +2,7 @@ import { botSeed, DECISION_BUDGET_MS } from '@bomberman/bot-sdk';
 import { MAX_PLAYERS as MAX_PLAYERS_PER_MATCH, randomSeed } from '@bomberman/game-engine';
 import type { FastifyBaseLogger } from 'fastify';
 import type { AppContext } from '../context.ts';
+import type { SkinSlug } from '@bomberman/protocol';
 import { BotRejectedError, RunnerUnavailableError } from '../runner/executor.ts';
 import {
   dequeueBot,
@@ -24,6 +25,7 @@ interface Pick {
   owner: string;
   kind: 'ranked' | 'house';
   ownerId: string | null;
+  skin: SkinSlug | null;
 }
 
 /**
@@ -123,6 +125,7 @@ export class Matchmaker {
       owner: '',
       kind: 'ranked',
       ownerId: entry.ownerId,
+      skin: null,
     }));
     const house = [...this.context.house];
     while (picks.length < MAX_PLAYERS_PER_MATCH && house.length > 0) {
@@ -134,6 +137,7 @@ export class Matchmaker {
         owner: 'House',
         kind: 'house',
         ownerId: null,
+        skin: null,
       });
     }
     return picks;
@@ -151,6 +155,7 @@ export class Matchmaker {
       owner: '',
       kind: 'ranked',
       ownerId: entry.ownerId,
+      skin: entry.skin,
     }));
     const house = [...this.context.house];
     while (picks.length < MAX_PLAYERS_PER_MATCH && house.length > 0) {
@@ -162,6 +167,7 @@ export class Matchmaker {
         owner: 'House',
         kind: 'house',
         ownerId: null,
+        skin: null,
       });
     }
     return picks;
@@ -177,8 +183,14 @@ export class Matchmaker {
       db,
       picks.map((pick) => pick.versionId),
     );
-    const owners = await db.query<{ bot_id: string; owner_id: string; display_name: string }>(
-      `select b.id as bot_id, u.id as owner_id, u.display_name from bots b join users u on u.id = b.owner_id
+    const owners = await db.query<{
+      bot_id: string;
+      owner_id: string;
+      display_name: string;
+      skin_slug: SkinSlug | null;
+    }>(
+      `select b.id as bot_id, b.skin_slug, u.id as owner_id, u.display_name
+       from bots b join users u on u.id = b.owner_id
        where b.id = any($1::uuid[])`,
       [picks.map((pick) => pick.botId)],
     );
@@ -204,13 +216,19 @@ export class Matchmaker {
         }
         const owner = ownerOf.get(pick.botId);
         participants.push({
-          info: { name: pick.name, owner: owner?.display_name ?? pick.owner, kind: pick.kind },
+          info: {
+            name: pick.name,
+            owner: owner?.display_name ?? pick.owner,
+            kind: pick.kind,
+            skin: owner?.skin_slug ?? pick.skin,
+          },
           record: {
             kind: pick.kind,
             botId: pick.botId,
             botVersionId: pick.versionId,
-            userId: owner?.owner_id ?? null,
+            userId: pick.kind === 'ranked' ? (owner?.owner_id ?? null) : null,
             botName: pick.name,
+            skin: owner?.skin_slug ?? pick.skin,
           },
           controller,
         });

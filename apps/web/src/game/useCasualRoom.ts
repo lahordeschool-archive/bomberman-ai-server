@@ -63,6 +63,13 @@ export function useCasualRoom(
     const onInit = (init: MatchInit) => {
       if (init.matchId !== matchId.current) return;
       setMatch({ init, slot: mySlot.current });
+      rendererRef.current?.setPlayerSkins(
+        new Map(
+          init.participants.flatMap((participant) =>
+            participant.skin ? [[participant.slot, participant.skin] as const] : [],
+          ),
+        ),
+      );
       rendererRef.current?.reset(init.snapshot);
       setSnapshot(init.snapshot);
     };
@@ -128,10 +135,14 @@ export function useCasualRoom(
     match,
     snapshot,
     error,
-    create: (botName: string) =>
-      run(async () => setLobby(await emitWithAck<CasualLobby>('casual:create', { botName }))),
-    join: (code: string, botName: string) =>
-      run(async () => setLobby(await emitWithAck<CasualLobby>('casual:join', { code, botName }))),
+    create: (botName: string, botId?: string) =>
+      run(async () =>
+        setLobby(await emitWithAck<CasualLobby>('casual:create', { botName, botId })),
+      ),
+    join: (code: string, botName: string, botId?: string) =>
+      run(async () =>
+        setLobby(await emitWithAck<CasualLobby>('casual:join', { code, botName, botId })),
+      ),
     start: (houseBots: string[]) => run(() => emitWithAck('casual:start', { houseBots })),
     leave: () => {
       getSocket().emit('casual:leave');
