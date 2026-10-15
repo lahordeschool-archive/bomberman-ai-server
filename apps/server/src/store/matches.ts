@@ -1,11 +1,13 @@
 import type { MatchResult, MatchSettings, RecordedIntent } from '@bomberman/game-engine';
 import type { MatchParticipantSummary, MatchSummary, ReplayResponse } from '@bomberman/protocol';
+import type { SkinSlug } from '@bomberman/protocol';
 import { encodeIntent } from '@bomberman/protocol';
 import type { Queryable } from '../db/database.ts';
 import { iso, isoOrNull } from '../db/rows.ts';
 import { DECISIVE_ELO_K, multiplayerElo } from '../ratings/elo.ts';
 import { awardMatchAchievements } from './achievements.ts';
 import { DEFAULT_RATING } from './bots.ts';
+import { awardPositiveElo } from './skins.ts';
 
 export interface NewParticipant {
   slot: number;
@@ -14,6 +16,7 @@ export interface NewParticipant {
   botVersionId: string | null;
   userId: string | null;
   botName: string;
+  skin?: SkinSlug | null;
 }
 
 export interface NewMatch {
@@ -45,8 +48,9 @@ export async function insertMatch(db: Queryable, match: NewMatch): Promise<strin
   const id = rows[0]!.id;
   for (const participant of match.participants) {
     await db.query(
-      `insert into match_participants (match_id, slot, kind, bot_id, bot_version_id, user_id, bot_name)
-       values ($1, $2, $3, $4, $5, $6, $7)`,
+      `insert into match_participants
+         (match_id, slot, kind, bot_id, bot_version_id, user_id, bot_name, skin_slug)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         id,
         participant.slot,
@@ -55,6 +59,7 @@ export async function insertMatch(db: Queryable, match: NewMatch): Promise<strin
         participant.botVersionId,
         participant.userId,
         participant.botName,
+        participant.skin ?? null,
       ],
     );
   }
@@ -184,8 +189,13 @@ export async function applyRatings(tx: Queryable, matchId: string): Promise<void
     match.rows[0].engine_version >= 6 &&
     match.rows[0].end_reason === 'lastStanding' &&
     match.rows[0].winner_slot !== null;
-  const { rows } = await tx.query<{ slot: number; bot_id: string; placement: number }>(
-    `select slot, bot_id, placement from match_participants
+  const { rows } = await tx.query<{
+    slot: number;
+    bot_id: string;
+    user_id: string | null;
+    placement: number;
+  }>(
+    `select slot, bot_id, user_id, placement from match_participants
      where match_id = $1 and bot_id is not null and placement is not null
      order by slot`,
     [matchId],
@@ -206,6 +216,7 @@ export async function applyRatings(tx: Queryable, matchId: string): Promise<void
     rows.map((row, index) => ({ rating: before[index]!, placement: row.placement })),
     decisive ? DECISIVE_ELO_K : undefined,
   );
+  const positiveByUser = new Map<string, number>();
   for (const [index, row] of rows.entries()) {
     await tx.query(
       'update match_participants set rating_before = $3, rating_after = $4 where match_id = $1 and slot = $2',
@@ -216,6 +227,13 @@ export async function applyRatings(tx: Queryable, matchId: string): Promise<void
        where bot_id = $1`,
       [row.bot_id, after[index], row.placement === 1 ? 1 : 0],
     );
+    if (row.user_id) {
+      const gain = Math.max(0, after[index]! - before[index]!);
+      positiveByUser.set(row.user_id, (positiveByUser.get(row.user_id) ?? 0) + gain);
+    }
+  }
+  for (const [userId, gain] of positiveByUser) {
+    await awardPositiveElo(tx, userId, matchId, gain);
   }
 }
 
@@ -258,6 +276,7 @@ interface ParticipantRow {
   kills: number | null;
   rating_before: number | null;
   rating_after: number | null;
+  skin_slug: SkinSlug | null;
 }
 
 async function attachParticipants(db: Queryable, matches: MatchRow[]): Promise<MatchSummary[]> {
@@ -265,7 +284,7 @@ async function attachParticipants(db: Queryable, matches: MatchRow[]): Promise<M
   const { rows } = await db.query<ParticipantRow>(
     `select p.match_id, p.slot, p.bot_id, p.bot_name, v.version as bot_version,
             u.username as owner_username, u.display_name as owner_display_name, u.is_house as owner_is_house,
-            p.placement, p.score, p.kills, p.rating_before, p.rating_after
+            p.placement, p.score, p.kills, p.rating_before, p.rating_after, p.skin_slug
      from match_participants p
      left join bot_versions v on v.id = p.bot_version_id
      left join users u on u.id = p.user_id
@@ -293,6 +312,7 @@ async function attachParticipants(db: Queryable, matches: MatchRow[]): Promise<M
       kills: row.kills,
       ratingBefore: row.rating_before,
       ratingAfter: row.rating_after,
+      skin: row.skin_slug,
     });
     byMatch.set(row.match_id, list);
   }

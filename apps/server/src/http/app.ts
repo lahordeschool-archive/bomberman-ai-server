@@ -12,6 +12,7 @@ import { registerBotRoutes } from './routes/bots.ts';
 import { registerPublicRoutes } from './routes/public.ts';
 import { registerAdminRoutes } from './routes/admin.ts';
 import { registerTournamentRoutes } from './routes/tournaments.ts';
+import { registerSkinRoutes } from './routes/skins.ts';
 import { registerSessions } from './session-plugin.ts';
 
 /**
@@ -109,6 +110,7 @@ export async function buildApp(
   registerAuthRoutes(app, context);
   registerBotRoutes(app, context);
   registerPublicRoutes(app, context);
+  registerSkinRoutes(app, context);
   registerTournamentRoutes(app, context);
   registerAdminRoutes(app, context);
 

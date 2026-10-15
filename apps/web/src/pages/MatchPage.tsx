@@ -237,6 +237,18 @@ export default function MatchPage({ matchId }: { matchId: string }) {
 
   useEffect(() => renderer?.setMuted(muted), [renderer, muted]);
 
+  useEffect(() => {
+    const participants = summary?.participants ?? liveInit?.participants ?? [];
+    renderer?.setPlayerSkins(
+      new Map(
+        participants.flatMap((participant) =>
+          participant.skin ? [[participant.slot, participant.skin] as const] : [],
+        ),
+      ),
+    );
+    if (renderer && snapshot) renderer.reset(snapshot);
+  }, [renderer, summary, liveInit]); // snapshot is intentionally applied only when skins change
+
   const ownSlots = (summary?.participants ?? [])
     .filter((participant) => user && participant.owner?.username === user.username)
     .map((participant) => participant.slot)

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { type BrowserBot, createBrowserBot } from '../bots/browser-bot.ts';
 import type { WorkerBotEvents } from '../bots/worker-bot.ts';
 import type { ArenaRenderer } from './renderer.ts';
+import type { SkinSlug } from '@bomberman/protocol';
 
 export interface LocalParticipant {
   name: string;
@@ -11,6 +12,7 @@ export interface LocalParticipant {
   detail?: string;
   /** Console events are only reported for your own bot. */
   events?: WorkerBotEvents;
+  skin?: SkinSlug | null;
 }
 
 export type LocalMatchStatus = 'idle' | 'loading' | 'running' | 'finished' | 'error';
@@ -61,6 +63,13 @@ export function useLocalMatch(renderer: ArenaRenderer | null) {
           playerCount: participants.length,
           settings: options.maxTicks ? { maxTicks: options.maxTicks } : undefined,
         });
+        rendererRef.current?.setPlayerSkins(
+          new Map(
+            participants.flatMap((participant, slot) =>
+              participant.skin ? [[slot, participant.skin] as const] : [],
+            ),
+          ),
+        );
         const initial = toSnapshot(state, []);
         rendererRef.current?.reset(initial);
         setSnapshot(initial);

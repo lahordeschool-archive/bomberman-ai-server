@@ -11,6 +11,7 @@ import {
   TICK_MS,
   TILE_SIZE,
 } from '@bomberman/game-engine';
+import { SKINS, type SkinSlug } from '@bomberman/protocol';
 
 const WIDTH = GRID_WIDTH * TILE_SIZE;
 const HEIGHT = GRID_HEIGHT * TILE_SIZE;
@@ -39,6 +40,7 @@ interface PlayerSprite {
   targetY: number;
   alive: boolean;
   facing: SnapshotPlayer['facing'];
+  appearance: string;
 }
 
 class ArenaScene extends Phaser.Scene {
@@ -55,6 +57,7 @@ class ArenaScene extends Phaser.Scene {
   private players = new Map<number, PlayerSprite>();
   private markers = new Map<number, Phaser.GameObjects.Graphics>();
   private highlighted: readonly number[] = [];
+  private playerSkins = new Map<number, SkinSlug>();
   private halted = false;
   muted = true;
 
@@ -80,6 +83,13 @@ class ArenaScene extends Phaser.Scene {
         frameWidth: 16,
         frameHeight: 16,
       });
+      for (const skin of SKINS) {
+        this.load.spritesheet(
+          `${skin.slug}-${color}-bm`,
+          `${ASSETS}/skins/${skin.slug}_${color}.png`,
+          { frameWidth: 17, frameHeight: 26 },
+        );
+      }
     }
     this.load.spritesheet('tiles', `${ASSETS}/tiles/snes_stage_1.png`, {
       frameWidth: 16,
@@ -94,43 +104,11 @@ class ArenaScene extends Phaser.Scene {
 
   create(): void {
     for (const color of PLAYER_COLORS) {
-      const walk = (key: string, start: number) =>
-        this.anims.create({
-          key: `${color}-${key}`,
-          frames: this.anims.generateFrameNumbers(`${color}-bm`, { start, end: start + 2 }),
-          frameRate: 8,
-          repeat: -1,
-        });
-      walk('up', 0);
-      walk('left', 3);
-      walk('down', 6);
-      walk('right', 9);
-      this.anims.create({
-        key: `${color}-death`,
-        frames: this.anims.generateFrameNumbers(`${color}-bm`, { start: 12, end: 17 }),
-        frameRate: 8,
-        repeat: 0,
-      });
-      this.anims.create({
-        key: `${color}-bomb-ticking`,
-        frames: this.anims.generateFrameNumbers(`${color}-bomb`, { start: 0, end: 3 }),
-        frameRate: 3,
-        repeat: -1,
-      });
-      this.anims.create({
-        key: `${color}-wall-destroyed`,
-        frames: this.anims.generateFrameNumbers(`${color}-wall`, { start: 0, end: 5 }),
-        frameRate: 12,
-        repeat: 0,
-      });
-      for (const animation of Object.values(FLAME_ANIMATIONS)) {
-        this.anims.create({
-          key: `${color}-flame-${animation.name}`,
-          frames: this.anims.generateFrameNumbers(`${color}-flame`, { frames: animation.frames }),
-          frameRate: 18,
-          repeat: -1,
-        });
+      this.createPlayerAnimations(`${color}-bm`, color);
+      for (const skin of SKINS) {
+        this.createPlayerAnimations(`${skin.slug}-${color}-bm`, `${skin.slug}-${color}`);
       }
+      this.createWorldAnimations(color);
     }
 
     this.createThemeTextures();
@@ -139,6 +117,49 @@ class ArenaScene extends Phaser.Scene {
     if (this.queued) {
       this.apply(this.queued.snapshot, this.queued.instant);
       this.queued = null;
+    }
+  }
+
+  private createPlayerAnimations(texture: string, prefix: string): void {
+    const walk = (key: string, start: number) =>
+      this.anims.create({
+        key: `${prefix}-${key}`,
+        frames: this.anims.generateFrameNumbers(texture, { start, end: start + 2 }),
+        frameRate: 8,
+        repeat: -1,
+      });
+    walk('up', 0);
+    walk('left', 3);
+    walk('down', 6);
+    walk('right', 9);
+    this.anims.create({
+      key: `${prefix}-death`,
+      frames: this.anims.generateFrameNumbers(texture, { start: 12, end: 17 }),
+      frameRate: 8,
+      repeat: 0,
+    });
+  }
+
+  private createWorldAnimations(color: string): void {
+    this.anims.create({
+      key: `${color}-bomb-ticking`,
+      frames: this.anims.generateFrameNumbers(`${color}-bomb`, { start: 0, end: 3 }),
+      frameRate: 3,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: `${color}-wall-destroyed`,
+      frames: this.anims.generateFrameNumbers(`${color}-wall`, { start: 0, end: 5 }),
+      frameRate: 12,
+      repeat: 0,
+    });
+    for (const animation of Object.values(FLAME_ANIMATIONS)) {
+      this.anims.create({
+        key: `${color}-flame-${animation.name}`,
+        frames: this.anims.generateFrameNumbers(`${color}-flame`, { frames: animation.frames }),
+        frameRate: 18,
+        repeat: -1,
+      });
     }
   }
 
@@ -183,6 +204,10 @@ class ArenaScene extends Phaser.Scene {
       marker.fillTriangle(-5, -4, 5, -4, 0, 1);
       this.markers.set(slot, marker);
     }
+  }
+
+  setPlayerSkins(skins: ReadonlyMap<number, SkinSlug>): void {
+    this.playerSkins = new Map(skins);
   }
 
   clearAll(): void {
@@ -439,15 +464,17 @@ class ArenaScene extends Phaser.Scene {
 
   private syncPlayer(player: SnapshotPlayer, instant: boolean): void {
     const color = colorOf(player.id);
+    const skin = this.playerSkins.get(player.id);
+    const appearance = skin ? `${skin}-${color}` : color;
     const targetX = player.px * TILE_SIZE + TILE_SIZE / 2;
     const targetY = player.py * TILE_SIZE + TILE_SIZE / 2;
     let entry = this.players.get(player.id);
     if (!entry) {
       const sprite = this.add
-        .sprite(targetX, targetY, `${color}-bm`, IDLE_FRAMES.down)
+        .sprite(targetX, targetY, `${appearance}-bm`, IDLE_FRAMES.down)
         .setOrigin(0.47, 0.7)
         .setDepth(10);
-      entry = { sprite, targetX, targetY, alive: true, facing: player.facing };
+      entry = { sprite, targetX, targetY, alive: true, facing: player.facing, appearance };
       this.players.set(player.id, entry);
       if (!player.alive) {
         entry.alive = false;
@@ -467,7 +494,7 @@ class ArenaScene extends Phaser.Scene {
     if (!player.alive) {
       if (entry.alive) {
         entry.alive = false;
-        sprite.play(`${color}-death`);
+        sprite.play(`${entry.appearance}-death`);
         sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => sprite.setVisible(false));
       }
       return;
@@ -475,7 +502,7 @@ class ArenaScene extends Phaser.Scene {
     entry.alive = true;
     sprite.setVisible(true);
     if (player.moving) {
-      sprite.play(`${color}-${player.facing}`, true);
+      sprite.play(`${entry.appearance}-${player.facing}`, true);
     } else {
       sprite.anims.stop();
       sprite.setFrame(IDLE_FRAMES[player.facing]);
@@ -492,6 +519,7 @@ export class ArenaRenderer {
   private pending: { snapshot: Snapshot; instant: boolean } | null = null;
   private muted = true;
   private highlighted: readonly number[] = [];
+  private playerSkins = new Map<number, SkinSlug>();
   private fitFrame = 0;
 
   constructor(parent: HTMLElement) {
@@ -527,6 +555,7 @@ export class ArenaRenderer {
       this.scene = scene;
       scene.muted = this.muted;
       scene.setHighlighted(this.highlighted);
+      scene.setPlayerSkins(this.playerSkins);
       if (this.pending) {
         scene.apply(this.pending.snapshot, this.pending.instant);
         this.pending = null;
@@ -570,6 +599,11 @@ export class ArenaRenderer {
   setHighlighted(slots: readonly number[]): void {
     this.highlighted = slots;
     this.scene?.setHighlighted(slots);
+  }
+
+  setPlayerSkins(skins: ReadonlyMap<number, SkinSlug>): void {
+    this.playerSkins = new Map(skins);
+    this.scene?.setPlayerSkins(skins);
   }
 
   setMuted(muted: boolean): void {

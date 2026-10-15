@@ -9,6 +9,7 @@ import {
   rawActionPayload,
   type ClientToServerEvents,
   type ServerToClientEvents,
+  type SkinSlug,
 } from '@bomberman/protocol';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Server, Socket } from 'socket.io';
@@ -42,6 +43,7 @@ interface Member {
   displayName: string;
   botName: string;
   socket: GameSocket;
+  skin: SkinSlug | null;
 }
 
 interface Lobby {
@@ -119,16 +121,17 @@ export class CasualRooms {
     return socket.data.user;
   }
 
-  create(socket: GameSocket, payload: unknown): CasualLobby {
+  async create(socket: GameSocket, payload: unknown): Promise<CasualLobby> {
     const user = this.requireUser(socket);
-    const { botName } = casualCreatePayload.parse(payload ?? {});
+    const { botName, botId } = casualCreatePayload.parse(payload ?? {});
+    const skin = await this.botSkin(user.id, botId);
     this.leave(socket);
     if (this.lobbies.size >= MAX_LOBBIES)
       throw new UserError('Too many rooms are open. Try again soon.');
     const lobby: Lobby = {
       code: this.newCode(),
       hostUserId: user.id,
-      members: [{ userId: user.id, displayName: user.displayName, botName, socket }],
+      members: [{ userId: user.id, displayName: user.displayName, botName, socket, skin }],
       status: 'waiting',
       matchId: null,
     };
@@ -138,9 +141,9 @@ export class CasualRooms {
     return this.view(lobby);
   }
 
-  join(socket: GameSocket, payload: unknown): CasualLobby {
+  async join(socket: GameSocket, payload: unknown): Promise<CasualLobby> {
     const user = this.requireUser(socket);
-    const { code, botName } = casualJoinPayload.parse(payload);
+    const { code, botName, botId } = casualJoinPayload.parse(payload);
     const lobby = this.lobbies.get(code);
     if (!lobby) throw new UserError('No room with that code.');
     if (lobby.status !== 'waiting') throw new UserError('That room is already playing.');
@@ -149,11 +152,22 @@ export class CasualRooms {
     }
     if (lobby.members.length >= MAX_PLAYERS) throw new UserError('That room is full.');
     this.leave(socket);
-    lobby.members.push({ userId: user.id, displayName: user.displayName, botName, socket });
+    const skin = await this.botSkin(user.id, botId);
+    lobby.members.push({ userId: user.id, displayName: user.displayName, botName, socket, skin });
     this.lobbyOf.set(socket.id, code);
     void socket.join(`casual:${code}`);
     this.broadcast(lobby);
     return this.view(lobby);
+  }
+
+  private async botSkin(userId: string, botId: string | undefined): Promise<SkinSlug | null> {
+    if (!botId) return null;
+    const result = await this.context.db.query<{ skin_slug: SkinSlug | null }>(
+      'select skin_slug from bots where id = $1 and owner_id = $2 and deleted_at is null',
+      [botId, userId],
+    );
+    if (!result.rows[0]) throw new UserError('That bot is not available.');
+    return result.rows[0].skin_slug;
   }
 
   leave(socket: GameSocket): void {
@@ -202,13 +216,19 @@ export class CasualRooms {
     try {
       for (const member of members) {
         participants.push({
-          info: { name: member.botName, owner: member.displayName, kind: 'browser' },
+          info: {
+            name: member.botName,
+            owner: member.displayName,
+            kind: 'browser',
+            skin: member.skin,
+          },
           record: {
             kind: 'browser',
             botId: null,
             botVersionId: null,
             userId: member.userId,
             botName: member.botName,
+            skin: member.skin,
           },
           controller: {
             decide: (observation, signal, budgetMs) =>
@@ -218,13 +238,14 @@ export class CasualRooms {
       }
       for (const bot of house) {
         participants.push({
-          info: { name: bot.name, owner: 'House', kind: 'house' },
+          info: { name: bot.name, owner: 'House', kind: 'house', skin: null },
           record: {
             kind: 'house',
             botId: bot.botId,
             botVersionId: bot.versionId,
             userId: null,
             botName: bot.name,
+            skin: null,
           },
           controller: await this.context.executor.createSession(
             bot.source,

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { SkinDefinition, SkinSlug } from './skins.ts';
 
 export const USERNAME_PATTERN = /^[a-z0-9_]{3,24}$/;
 
@@ -64,6 +65,12 @@ export const botNameSchema = z
 
 export const createBotBody = z.object({ name: botNameSchema });
 export const updateBotBody = z.object({ name: botNameSchema });
+export const equipSkinBody = z.object({
+  skin: z.string().trim().min(1).max(32).nullable(),
+});
+export const purchaseSkinBody = z.object({
+  skin: z.string().trim().min(1).max(32),
+});
 
 export const visibilitySchema = z.enum(['private', 'public']);
 
@@ -79,6 +86,7 @@ export const submitVersionBody = z.object({
     .max(60)
     .optional()
     .transform((label) => label || null),
+  ranked: z.boolean().default(false),
 });
 
 export const paginationQuery = z.object({
@@ -118,6 +126,7 @@ export interface BotSummary {
   activeVersion: { id: string; version: number; label: string | null; createdAt: string } | null;
   rating: { rating: number; games: number; wins: number } | null;
   queued: boolean;
+  skin: SkinSlug | null;
   createdAt: string;
 }
 
@@ -160,6 +169,7 @@ export interface MatchParticipantSummary {
   kills: number | null;
   ratingBefore: number | null;
   ratingAfter: number | null;
+  skin: SkinSlug | null;
 }
 
 export interface MatchSummary {
@@ -196,6 +206,13 @@ export interface Achievement {
   description: string;
   icon: string;
   earnedAt: string;
+}
+
+export interface SkinStore {
+  balance: number;
+  earned: number;
+  owned: SkinSlug[];
+  skins: readonly SkinDefinition[];
 }
 
 export interface TournamentStanding {
