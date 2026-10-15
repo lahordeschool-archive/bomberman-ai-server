@@ -1371,7 +1371,7 @@ a.match-row:hover {
 .skin-card:hover .skin-preview,
 .skin-card:focus-within .skin-preview,
 .skin-choice:focus-visible .skin-preview {
-  animation: skin-walk 520ms steps(3) infinite;
+  animation: skin-walk 900ms steps(3) infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .skin-card:hover .skin-preview,
