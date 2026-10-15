@@ -728,12 +728,16 @@ button.match-row[aria-pressed='true'] {
     width: 42px;
   }
   .leaderboard th:nth-child(4) {
-    width: 60px;
+    width: 64px;
   }
+  .leaderboard th:nth-child(3),
   .leaderboard th:nth-child(5),
   .leaderboard th:nth-child(6),
+  .leaderboard th:nth-child(7),
+  .leaderboard td:nth-child(3),
   .leaderboard td:nth-child(5),
-  .leaderboard td:nth-child(6) {
+  .leaderboard td:nth-child(6),
+  .leaderboard td:nth-child(7) {
     display: none;
   }
   .leaderboard a {

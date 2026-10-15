@@ -83,7 +83,13 @@ export function LeaderboardPage() {
                           <strong>{entry.botName}</strong>
                         </Link>
                         <small className="mobile-table-meta">
-                          {entry.games} games · {entry.wins} wins ·{' '}
+                          by{' '}
+                          {entry.owner.isHouse ? (
+                            'House'
+                          ) : (
+                            <Link to={`/u/${entry.owner.username}`}>{entry.owner.displayName}</Link>
+                          )}{' '}
+                          · {entry.games} games · {entry.wins} wins ·{' '}
                           {formatWinRate(entry.wins, entry.games)}
                         </small>
                       </td>
