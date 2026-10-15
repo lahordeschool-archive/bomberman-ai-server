@@ -218,13 +218,20 @@ def draw_effect(draw, box, kind, base, accent, phase, orientation):
                 draw.line([(left + x - 1, top + y), (left + x + 1, top + y)], fill=color)
                 draw.line([(left + x, top + y - 1), (left + x, top + y + 1)], fill=color)
     elif kind == "crown":  # Crown: spinning silver coins.
-        silver = (210, 222, 232, 255)
+        silver = (150, 168, 188, 255)
         dark = (72, 88, 104, 255)
         for offset in (1, 7):
-            width = max(2, 6 - abs(2 - phase) * 2)
+            # Coins turn as they travel, but stay wide enough to read as coins at 16 px.
+            width = 6
             cx = left + offset + 3
-            draw.ellipse((cx - width // 2, top + offset, cx + width // 2, top + offset + 6), fill=silver, outline=dark)
-            draw.line([(cx, top + offset + 1), (cx, top + offset + 5)], fill=white)
+            draw.ellipse(
+                (cx - width // 2, top + offset, cx + width // 2, top + offset + 6),
+                fill=silver,
+                outline=white,
+            )
+            shine_x = cx - 1 + (phase % 3)
+            draw.line([(shine_x, top + offset + 1), (shine_x, top + offset + 4)], fill=white)
+            draw.point((cx, top + offset + 3), fill=dark)
 
 
 def generate_flame(slug, base, accent, decoration, player_color, player_tint):
