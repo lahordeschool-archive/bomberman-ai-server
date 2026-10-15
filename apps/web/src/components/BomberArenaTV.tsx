@@ -339,6 +339,7 @@ export function BomberArenaTV({
         slot: participant.slot,
         name: participant.name,
         detail: participant.owner,
+        skin: participant.skin,
       })) ?? []);
   const isLive = Boolean(init) && !result;
   const showing = Boolean(init || timeline);

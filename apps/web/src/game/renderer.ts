@@ -12,7 +12,7 @@ import {
   TILE_SIZE,
 } from '@bomberman/game-engine';
 import { SKINS, type SkinSlug } from '@bomberman/protocol';
-import { SWATCHES } from './Scoreboard.tsx';
+import { assignPlayerColors } from './player-colors.ts';
 
 const WIDTH = GRID_WIDTH * TILE_SIZE;
 const HEIGHT = GRID_HEIGHT * TILE_SIZE;
@@ -41,7 +41,6 @@ const FLAME_ANIMATIONS: Record<FlameKind, { name: string; frames: number[] }> = 
 };
 
 const colorOf = (playerId: number) => PLAYER_COLORS[playerId % PLAYER_COLORS.length]!;
-const markerColor = (slot: number) => Number.parseInt(SWATCHES[colorOf(slot)].slice(1), 16);
 const cellKey = (x: number, y: number) => `${x},${y}`;
 const tileKey = (theme: Snapshot['theme'], kind: 'floor' | 'hard' | 'soft') =>
   theme === 'grass' ? 'tiles' : `${theme}-${kind}`;
@@ -229,6 +228,9 @@ class ArenaScene extends Phaser.Scene {
 
   /** One marker per living player: arrow for you, dot for others, in their scoreboard color. */
   private refreshMarkers(): void {
+    const colors = assignPlayerColors(
+      [...this.players.keys()].map((slot) => ({ slot, skin: this.playerSkins.get(slot) })),
+    );
     for (const [slot, marker] of this.markers) {
       if (!this.players.has(slot)) {
         marker.destroy();
@@ -241,16 +243,16 @@ class ArenaScene extends Phaser.Scene {
         marker = this.add.graphics().setDepth(100).setVisible(false);
         this.markers.set(slot, marker);
       }
-      this.drawMarker(marker, slot, this.highlighted.includes(slot));
+      this.drawMarker(marker, colors.get(slot)!, this.highlighted.includes(slot));
     }
   }
 
   private drawMarker(
     marker: Phaser.GameObjects.Graphics,
-    slot: number,
+    color: string,
     isOwn: boolean,
   ): void {
-    const fill = markerColor(slot);
+    const fill = Number.parseInt(color.slice(1), 16);
     marker.clear();
     if (isOwn) {
       marker.fillStyle(0x000000, 0.75);
@@ -287,6 +289,7 @@ class ArenaScene extends Phaser.Scene {
       entry.sprite.setTexture(`${appearance}-flame`);
       entry.sprite.play(`${appearance}-flame-${FLAME_ANIMATIONS[entry.kind].name}`);
     }
+    this.refreshMarkers();
   }
 
   private appearanceOf(playerId: number): string {

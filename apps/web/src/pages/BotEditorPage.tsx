@@ -360,6 +360,14 @@ export default function BotEditorPage({ botId }: { botId: string }) {
     () => buildParticipants(drawn ?? opponents),
     [buildParticipants, drawn, opponents],
   );
+  const playerSkins = JSON.stringify(
+    (casual.match?.init.participants ?? participants).flatMap((participant, slot) =>
+      participant.skin ? [[('slot' in participant ? participant.slot : slot), participant.skin]] : [],
+    ),
+  );
+  useEffect(() => {
+    renderer?.setPlayerSkins(new Map(JSON.parse(playerSkins) as [number, SkinSlug][]));
+  }, [renderer, playerSkins]);
 
   async function runTest() {
     casual.leave();
@@ -537,11 +545,13 @@ export default function BotEditorPage({ botId }: { botId: string }) {
         slot: participant.slot,
         name: participant.name,
         detail: participant.owner,
+        skin: participant.skin,
       }))
     : participants.map((participant, slot) => ({
         slot,
         name: participant.name,
         detail: participant.detail,
+        skin: participant.skin,
       }));
   const running = local.status === 'loading' || local.status === 'running';
   const isHost = casual.lobby?.hostUserId === user?.id;

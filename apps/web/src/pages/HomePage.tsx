@@ -1,6 +1,6 @@
 import { randomSampleBots, type SampleBot } from '@bomberman/bot-sdk';
 import { type Snapshot, TICK_MS } from '@bomberman/game-engine';
-import type { MatchSummary } from '@bomberman/protocol';
+import type { MatchSummary, SkinSlug } from '@bomberman/protocol';
 import { Code, Flask, Robot, Trophy } from '@phosphor-icons/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BomberArenaTV } from '../components/BomberArenaTV.tsx';
@@ -38,6 +38,13 @@ function ReplayDemo({ matches }: { matches: MatchSummary[] }) {
         const { snapshots } = buildTimeline(await api.replay(summary.id));
         if (cancelled) return;
         setCurrent(summary);
+        renderer.setPlayerSkins(
+          new Map<number, SkinSlug>(
+            summary.participants.flatMap((participant) =>
+              participant.skin ? [[participant.slot, participant.skin] as const] : [],
+            ),
+          ),
+        );
         renderer.reset(snapshots[0]!);
         setSnapshot(snapshots[0]!);
         let index = 0;
