@@ -23,15 +23,36 @@ export const casualStartPayload = z.object({
   houseBots: z.array(z.string().max(32)).max(3).default([]),
 });
 
+/** A spectator's chat line; the server trims and caps it further. */
+export const chatSendPayload = z.object({
+  matchId: z.string().min(1).max(64),
+  text: z.string().max(500),
+});
+
 /** What a browser bot may answer to `bot:observe`; parsed again with `parseAction`. */
 export const rawActionPayload = z.union([
-  z.string().max(64),
+  z.string().max(256),
   z.object({
     type: z.string().max(16).nullable().optional(),
     direction: z.string().max(16).nullable().optional(),
+    say: z.string().max(256).nullable().optional(),
+    message: z.string().max(256).nullable().optional(),
   }),
   z.null(),
 ]);
+
+export type ChatAuthor =
+  { kind: 'user'; name: string; username: string } | { kind: 'bot'; name: string; slot: number };
+
+/** One line of a live match's chat. Chat lives only while the match runs. */
+export interface ChatMessage {
+  id: number;
+  matchId: string;
+  /** Epoch milliseconds. */
+  at: number;
+  from: ChatAuthor;
+  text: string;
+}
 
 export interface MatchParticipantInfo {
   slot: number;
@@ -48,6 +69,8 @@ export interface MatchInit {
   /** The match ends on a timeout when the snapshot tick reaches this. */
   maxTicks: number;
   snapshot: Snapshot;
+  /** Most recent chat lines, oldest first, for spectators joining mid match. */
+  chat: ChatMessage[];
 }
 
 export interface LiveSnapshot {
@@ -68,6 +91,7 @@ export type Ack<T> = (response: { ok: true; data: T } | { ok: false; error: stri
 export interface ClientToServerEvents {
   'match:watch': (payload: unknown, ack: Ack<MatchInit>) => void;
   'match:unwatch': (payload: unknown) => void;
+  'match:chat': (payload: unknown, ack: Ack<ChatMessage>) => void;
   'casual:create': (payload: unknown, ack: Ack<CasualLobby>) => void;
   'casual:join': (payload: unknown, ack: Ack<CasualLobby>) => void;
   'casual:leave': () => void;
@@ -78,6 +102,9 @@ export interface ServerToClientEvents {
   'match:init': (init: MatchInit) => void;
   'match:snapshot': (live: LiveSnapshot) => void;
   'match:end': (payload: { matchId: string; result: MatchResult }) => void;
+  'match:chat': (message: ChatMessage) => void;
+  /** Sockets watching the match, sent to its room whenever someone joins or leaves. */
+  'match:viewers': (payload: { matchId: string; viewers: number }) => void;
   'casual:lobby': (lobby: CasualLobby | null) => void;
   'casual:match': (payload: { matchId: string; slot: number }) => void;
   'bot:observe': (

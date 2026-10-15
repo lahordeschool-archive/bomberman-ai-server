@@ -275,6 +275,68 @@ describe('realtime', () => {
       replay.intents.some(([, slot, code]: [number, number, string]) => slot === 0 && code === 'd'),
     ).toBe(true);
   });
+
+  it('carries match chat from spectators and bots, one line per second each', async () => {
+    const host = new TestClient(server.app);
+    await host.register('chat_host');
+    const hostSocket = openSocket(host);
+    const anonymous = openSocket();
+    await Promise.all(
+      [hostSocket, anonymous].map(
+        (socket) => new Promise<void>((resolve) => socket.on('connect', () => resolve())),
+      ),
+    );
+    hostSocket.on('bot:observe', (_payload, ack) => ack('SAY   fire in the hole'));
+    const received: { from: { kind: string; name: string }; at: number; text: string }[] = [];
+    anonymous.on('match:chat', (message) => received.push(message));
+    let ended = false;
+    hostSocket.on('match:end', () => (ended = true));
+    const viewers: number[] = [];
+    hostSocket.on('match:viewers', ({ viewers: count }) => viewers.push(count));
+
+    const lobby = await hostSocket.emitWithAck('casual:create', { botName: 'Chatty' });
+    if (!lobby.ok) throw new Error(lobby.error);
+    const started = await hostSocket.emitWithAck('casual:start', { houseBots: ['random-walker'] });
+    if (!started.ok) throw new Error(started.error);
+    const { matchId } = started.data;
+
+    const watched = await anonymous.emitWithAck('match:watch', { matchId });
+    if (!watched.ok) throw new Error(watched.error);
+    expect(Array.isArray(watched.data.chat)).toBe(true);
+    expect(await anonymous.emitWithAck('match:chat', { matchId, text: 'hi' })).toEqual({
+      ok: false,
+      error: 'Sign in to chat.',
+    });
+
+    const first = await hostSocket.emitWithAck('match:chat', { matchId, text: '  gl hf  ' });
+    if (!first.ok) throw new Error(first.error);
+    expect(first.data.text).toBe('gl hf');
+    expect(first.data.from).toEqual({
+      kind: 'user',
+      name: expect.any(String),
+      username: 'chat_host',
+    });
+    expect(await hostSocket.emitWithAck('match:chat', { matchId, text: 'spam' })).toEqual({
+      ok: false,
+      error: 'One message per second, please.',
+    });
+
+    await waitFor(() => viewers.at(-1) === 2);
+    await waitFor(() => ended);
+    const afterEnd = await hostSocket.emitWithAck('match:chat', { matchId, text: 'gg' });
+    expect(afterEnd.ok).toBe(true);
+    await waitFor(() => received.some((message) => message.text === 'gg'));
+    anonymous.emit('match:unwatch', { matchId });
+    await waitFor(() => viewers.at(-1) === 1);
+    expect(received.some((message) => message.text === 'gl hf')).toBe(true);
+    const bot = received.filter((message) => message.from.kind === 'bot');
+    expect(bot.length).toBeGreaterThan(0);
+    expect(bot.every((message) => message.from.name === 'Chatty')).toBe(true);
+    expect(bot.every((message) => message.text === 'fire in the hole')).toBe(true);
+    for (let i = 1; i < bot.length; i++) {
+      expect(bot[i]!.at - bot[i - 1]!.at).toBeGreaterThanOrEqual(1000);
+    }
+  });
 });
 
 describe('startup recovery', () => {

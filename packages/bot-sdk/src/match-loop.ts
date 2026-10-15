@@ -48,6 +48,8 @@ export interface RunMatchOptions {
   signal?: AbortSignal;
   onTick?(state: GameState, events: GameEvent[]): void;
   onDecision?(record: RecordedIntent, raw: unknown): void;
+  /** Every answer that arrived in time, including idle ones that record no intent. */
+  onRawDecision?(playerId: number, raw: unknown): void;
   onDecisionError?(playerId: number, error: unknown): void;
 }
 
@@ -109,6 +111,11 @@ export async function runMatch(options: RunMatchOptions): Promise<RunMatchOutcom
           if (abort.signal.aborted) return;
           entry.decision = { intent: parseAction(raw), raw };
           entry.done = true;
+          try {
+            options.onRawDecision?.(playerId, raw);
+          } catch {
+            // Side channels never affect the match.
+          }
         },
         (error: unknown) => {
           if (abort.signal.aborted) return;

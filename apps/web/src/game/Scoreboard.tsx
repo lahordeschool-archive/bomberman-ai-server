@@ -8,7 +8,7 @@ export interface ScoreboardEntry {
   detail?: string | null;
 }
 
-const SWATCHES: Record<(typeof PLAYER_COLORS)[number], string> = {
+export const SWATCHES: Record<(typeof PLAYER_COLORS)[number], string> = {
   white: '#E8E8E8',
   black: '#5B5B5B',
   blue: '#4D8DF7',

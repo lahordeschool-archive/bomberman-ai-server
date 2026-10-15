@@ -2,7 +2,8 @@ import { randomSampleBots, type SampleBot } from '@bomberman/bot-sdk';
 import { type Snapshot, TICK_MS } from '@bomberman/game-engine';
 import type { MatchSummary } from '@bomberman/protocol';
 import { Code, Flask, Robot, Trophy } from '@phosphor-icons/react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { BomberArenaTV } from '../components/BomberArenaTV.tsx';
 import { TaglineReveal } from '../components/TaglineReveal.tsx';
 import { Button } from '../components/ui.tsx';
 import { ArenaCanvas } from '../game/ArenaCanvas.tsx';
@@ -13,11 +14,12 @@ import { useLocalMatch } from '../game/useLocalMatch.ts';
 import { api } from '../lib/api.ts';
 import { useRouter } from '../lib/router.tsx';
 import { useSession } from '../lib/session.tsx';
-import { DashboardPage } from './DashboardPage.tsx';
+import { LivePage } from './LivePage.tsx';
 
 const DEMO_TICKS = 90 * 20;
 
 const REPLAY_POOL = 12;
+const LIVE_POLL_MS = 5000;
 
 /** Replays recent ranked matches: server results, so it needs no Web Workers in the browser. */
 function ReplayDemo({ matches }: { matches: MatchSummary[] }) {
@@ -95,6 +97,23 @@ function DemoArena() {
   return matches.length > 0 ? <ReplayDemo matches={matches} /> : <LocalDemo />;
 }
 
+/** Live matches on Bomber Arena TV; recorded or local demos while nothing is on air. */
+function HeroScreen() {
+  const [offAir, setOffAir] = useState(false);
+  const goOffAir = useCallback(() => setOffAir(true), []);
+  useEffect(() => {
+    if (!offAir) return;
+    const timer = setInterval(() => {
+      api.liveMatches().then(
+        ({ matches }) => matches.length > 0 && setOffAir(false),
+        () => undefined,
+      );
+    }, LIVE_POLL_MS);
+    return () => clearInterval(timer);
+  }, [offAir]);
+  return offAir ? <DemoArena /> : <BomberArenaTV variant="embed" onOffAir={goOffAir} />;
+}
+
 function LocalDemo() {
   const [renderer, setRenderer] = useState<ArenaRenderer | null>(null);
   const [demo, setDemo] = useState(() => randomSampleBots(4));
@@ -160,7 +179,7 @@ function Landing() {
           </div>
           <p className="hero-proof">Free to play. A username and a password are all it takes.</p>
         </div>
-        <DemoArena />
+        <HeroScreen />
       </section>
 
       <section className="steps" aria-labelledby="how-title">
@@ -200,5 +219,5 @@ function Landing() {
 export function HomePage() {
   const { user, loading } = useSession();
   if (loading) return null;
-  return user ? <DashboardPage /> : <Landing />;
+  return user ? <LivePage /> : <Landing />;
 }

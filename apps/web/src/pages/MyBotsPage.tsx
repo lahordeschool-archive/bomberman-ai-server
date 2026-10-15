@@ -15,7 +15,7 @@ import { api } from '../lib/api.ts';
 import { Link, useRouter } from '../lib/router.tsx';
 import { useSession } from '../lib/session.tsx';
 
-export function DashboardPage() {
+export default function MyBotsPage() {
   const { user } = useSession();
   const { navigate } = useRouter();
   const [bots, setBots] = useState<BotSummary[] | null>(null);
@@ -57,8 +57,10 @@ export function DashboardPage() {
     <div className="page">
       <header className="page-header">
         <div>
-          <h1>Hi {user!.displayName}</h1>
-          <p className="muted">Pick a bot to keep working on, or start a new one.</p>
+          <h1>My bots</h1>
+          <p className="muted">
+            Hi {user!.displayName}, pick a bot to keep working on, or start a new one.
+          </p>
         </div>
       </header>
       <div className="dashboard-grid">

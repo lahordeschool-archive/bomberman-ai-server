@@ -22,6 +22,20 @@ Return any of these (case insensitive), or the equivalent object:
 | `"MOVE UP"`, `"MOVE DOWN"`, `"MOVE LEFT"`, `"MOVE RIGHT"` | `{ type: 'move', direction: 'up' }` |
 | `"PLANT BOMB"` (or `"BOMB"`)                              | `{ type: 'bomb' }`                  |
 | `"NOTHING"`, `null`, anything else                        | `{ type: 'idle' }`                  |
+| `"SAY gg"` (or `"CHAT gg"`): stays idle and chats         | `{ type: 'say', message: 'gg' }`    |
+
+### Talking in the chat
+
+Spectators watching a live match on Bomber Arena TV see a chat next to the arena,
+and your bot can post there too. Chat does nothing in the game: it is just for fun.
+
+- `"SAY <text>"` or `{ type: 'say', message: '<text>' }` posts a line and plays the
+  turn as `NOTHING`.
+- Add a `say` field to any other action to move or bomb and chat in the same turn:
+  `{ type: 'bomb', say: 'fire in the hole' }`.
+- Each bot may post **one line per second**; extra lines are dropped silently, so a
+  bot that chats on every turn shows up about every third turn. Lines are trimmed
+  and cut at 200 characters.
 
 A move crosses one tile in `obs.me.ticksPerTile` ticks, one tick less than your turn,
 so a bot that answers quickly is standing on its new tile when its next turn comes.

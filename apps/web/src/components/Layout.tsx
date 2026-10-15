@@ -7,11 +7,8 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const { user } = useSession();
   return (
     <>
-      <Link to="/" onClick={onNavigate}>
-        {user ? 'Dashboard' : 'Home'}
-      </Link>
-      <Link to="/matches" onClick={onNavigate}>
-        Matches
+      <Link to={user ? '/' : '/live'} onClick={onNavigate}>
+        Live
       </Link>
       <Link to="/leaderboard" onClick={onNavigate}>
         Leaderboard
@@ -19,15 +16,21 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
       <Link to="/tournaments" onClick={onNavigate}>
         Tournaments
       </Link>
-      {user?.role === 'moderator' || user?.role === 'admin' ? (
-        <Link to="/admin" onClick={onNavigate}>
-          Admin
-        </Link>
-      ) : null}
+      <span className="nav-separator" aria-hidden />
       {user ? (
-        <Link to="/account" onClick={onNavigate}>
-          {user.displayName}
-        </Link>
+        <>
+          <Link to="/bots" onClick={onNavigate}>
+            My bots
+          </Link>
+          {user.role === 'moderator' || user.role === 'admin' ? (
+            <Link to="/admin" onClick={onNavigate}>
+              Admin
+            </Link>
+          ) : null}
+          <Link to="/account" onClick={onNavigate}>
+            {user.displayName}
+          </Link>
+        </>
       ) : (
         <Link to="/login" onClick={onNavigate}>
           Sign in
@@ -38,6 +41,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function Layout({ children }: { children: ReactNode }) {
+  const { user } = useSession();
   const [open, setOpen] = useState(false);
   const { path } = useRouter();
   useEffect(() => setOpen(false), [path]);
@@ -84,7 +88,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </span>
         <span>
           <a href="https://github.com/lahordeschool/bomberman-ai-server">Source</a>
-          <Link to="/matches">Live matches</Link>
+          {user ? <Link to="/">Live matches</Link> : null}
         </span>
       </footer>
     </div>

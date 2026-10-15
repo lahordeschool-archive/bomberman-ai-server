@@ -13,12 +13,16 @@ export function MatchEndOverlay({
   result,
   names,
   onLeave,
+  leaveLabel = 'Back to Live',
+  leaveCountdown = 'Back to Live in',
 }: {
   /** Ticks left before the time limit while the match runs, null otherwise. */
   remainingTicks: number | null;
   result: MatchResult | null;
   names: Record<number, string>;
   onLeave: () => void;
+  leaveLabel?: string;
+  leaveCountdown?: string;
 }) {
   const [leaveIn, setLeaveIn] = useState(COUNTDOWN_SECONDS);
   const [stayed, setStayed] = useState(false);
@@ -44,12 +48,14 @@ export function MatchEndOverlay({
             {result.reason === 'timeout' ? "Time's up!" : 'Game over'}
           </p>
           <p className="match-end-winner">{winner ? `${winner} wins` : 'Draw'}</p>
-          <p className="muted">Back to the matches in {Math.max(0, leaveIn)}…</p>
+          <p className="muted">
+            {leaveCountdown} {Math.max(0, leaveIn)}…
+          </p>
           <div className="match-end-actions">
             <Button variant="secondary" onClick={() => setStayed(true)}>
               Stay and see the result
             </Button>
-            <Button onClick={onLeave}>Back to matches</Button>
+            <Button onClick={onLeave}>{leaveLabel}</Button>
           </div>
         </div>
       </div>

@@ -43,6 +43,7 @@ import {
   formatRating,
   Skeleton,
 } from '../components/ui.tsx';
+import { tvPath } from '../components/MatchList.tsx';
 import { Modal } from '../components/Modal.tsx';
 import type { WorkerBotEvents } from '../bots/worker-bot.ts';
 import { ArenaCanvas } from '../game/ArenaCanvas.tsx';
@@ -496,7 +497,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
       await api.deleteBot(botId);
       localStorage.removeItem(draftKey(botId));
       localStorage.removeItem(loadedCodeKey(botId));
-      navigate('/');
+      navigate('/bots');
     } catch (failure) {
       setActionError((failure as Error).message);
     }
@@ -506,7 +507,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
     return (
       <div className="page">
         <ErrorMessage>{loadError}</ErrorMessage>
-        <Link to="/">Back to your dashboard</Link>
+        <Link to="/bots">Back to your bots</Link>
       </div>
     );
   }
@@ -531,8 +532,8 @@ export default function BotEditorPage({ botId }: { botId: string }) {
     <div className={expanded ? 'editor-page is-expanded' : 'editor-page'}>
       <header className="editor-header">
         <div>
-          <Link to="/" className="muted">
-            Dashboard
+          <Link to="/bots" className="muted">
+            My bots
           </Link>
           {renaming !== null ? (
             <form className="rename-form" onSubmit={rename}>
@@ -906,9 +907,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
                     <Button onClick={casual.leave}>Leave room</Button>
                   </div>
                   {casual.match && casual.snapshot?.status === 'finished' ? (
-                    <Link to={`/matches/${casual.match.init.matchId}`}>
-                      Match over. Watch the replay
-                    </Link>
+                    <Link to={tvPath(casual.match.init.matchId)}>Match over. Watch the replay</Link>
                   ) : null}
                   <p className="field-hint">
                     Empty seats are filled with the opponents picked in Local test (random house
@@ -936,7 +935,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
                 >
                   {bot?.queued ? 'Leave the queue' : 'Queue for ranked'}
                 </Button>
-                <Link to="/matches">Watch live matches</Link>
+                <Link to="/">Watch live matches</Link>
               </div>
               {!bot?.activeVersion ? <p className="field-hint">Save a version first.</p> : null}
               {ranked ? (
@@ -949,7 +948,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
                   match.participants.some((participant) => participant.botId === botId),
                 )
                 .map((match) => (
-                  <Link key={match.id} to={`/matches/${match.id}`}>
+                  <Link key={match.id} to={tvPath(match.id)}>
                     Your bot is playing now. Watch the match
                   </Link>
                 ))}
