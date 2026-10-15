@@ -5,7 +5,6 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "apps/web/public/game/sprites/snes_white.png"
-EFFECT_SOURCE = ROOT / "apps/web/public/game/sprites"
 OUTPUT = ROOT / "apps/web/public/game/skins"
 
 SKINS = {
@@ -72,68 +71,270 @@ def decorate(draw, frame, kind, accent):
         draw.line([(x + 4, 7), (x + 13, 7)], fill=dark, width=1)
 
 
-def decorate_bomb(draw, frame, kind, base, accent):
+def shade_color(color, factor):
+    return tuple(min(255, max(0, round(channel * factor))) for channel in color)
+
+
+def draw_bomb(draw, frame, kind, base, accent):
+    """Draw a full 16×16 themed bomb (not an icon stuck on the SNES ball)."""
     x = frame * 16
-    if kind == "horns":
-        draw.polygon([(x + 4, 7), (x + 6, 3), (x + 8, 7)], fill=accent)
-        draw.polygon([(x + 9, 7), (x + 11, 3), (x + 13, 7)], fill=accent)
-    elif kind == "leaf":
-        draw.polygon([(x + 7, 5), (x + 12, 3), (x + 10, 8)], fill=accent)
-    elif kind == "fin":
-        draw.arc((x + 4, 6, x + 13, 13), 190, 350, fill=accent, width=2)
-    elif kind == "band":
-        draw.line([(x + 3, 9), (x + 13, 9)], fill=accent, width=2)
-    elif kind == "jewel":
-        draw.polygon([(x + 8, 5), (x + 11, 9), (x + 8, 12), (x + 5, 9)], fill=accent)
-    elif kind == "visor":
-        draw.rounded_rectangle((x + 4, 7, x + 12, 10), radius=1, fill=accent)
-    elif kind == "crystal":
-        draw.polygon([(x + 8, 4), (x + 11, 9), (x + 8, 13), (x + 5, 9)], fill=accent)
-    elif kind == "hood":
-        draw.ellipse((x + 4, 6, x + 12, 12), outline=accent, width=2)
-    elif kind == "stars":
-        draw.point((x + 6, 7), fill=accent)
-        draw.point((x + 10, 10), fill=(255, 255, 255))
-        draw.point((x + 11, 6), fill=base)
-    elif kind == "crown":
-        silver = (220, 228, 236)
-        draw.ellipse((x + 6, 7, x + 10, 11), fill=silver, outline=base)
-        draw.line([(x + 8, 8), (x + 8, 10)], fill=base)
+    bob = (0, -1, 0, 1)[frame % 4]
+    spark = (0, 1, 0, 1)[frame % 4]
+    white = (245, 250, 255)
+    black = (18, 16, 20)
+    wood = shade_color(base, 0.55)
+    wood_hi = shade_color(base, 0.85)
+    wood_lo = shade_color(base, 0.35)
+
+    if kind == "horns":  # Ember: a squat TNT crate with a sparking fuse.
+        # Crate body
+        draw.rectangle((x + 2, 5 + bob, x + 13, 14 + bob), fill=wood_lo)
+        draw.rectangle((x + 3, 6 + bob, x + 12, 13 + bob), fill=wood)
+        draw.rectangle((x + 3, 6 + bob, x + 12, 7 + bob), fill=wood_hi)
+        # Red warning band
+        band = shade_color(base, 1.05)
+        draw.rectangle((x + 3, 9 + bob, x + 12, 11 + bob), fill=band)
+        draw.rectangle((x + 3, 9 + bob, x + 12, 9 + bob), fill=accent)
+        # "TNT" ticks (readable as lettering at 16px)
+        draw.point((x + 5, 10 + bob), fill=white)
+        draw.point((x + 8, 10 + bob), fill=white)
+        draw.point((x + 11, 10 + bob), fill=white)
+        # Wood grain / straps
+        draw.line([(x + 2, 5 + bob), (x + 2, 14 + bob)], fill=black)
+        draw.line([(x + 13, 5 + bob), (x + 13, 14 + bob)], fill=black)
+        draw.line([(x + 2, 14 + bob), (x + 13, 14 + bob)], fill=black)
+        # Fuse + spark
+        draw.line([(x + 8, 5 + bob), (x + 8, 3 + bob)], fill=(60, 48, 36))
+        draw.point((x + 8 + spark, 2 + bob), fill=accent)
+        draw.point((x + 7 + spark, 1 + bob), fill=white)
+
+    elif kind == "fin":  # Tide: a filled water canteen / gourd.
+        body = base
+        body_hi = accent
+        body_lo = shade_color(base, 0.55)
+        cork = (168, 118, 64)
+        cork_hi = (214, 168, 98)
+        # Flask body (rounded bottle)
+        draw.ellipse((x + 3, 5 + bob, x + 12, 14 + bob), fill=body_lo)
+        draw.ellipse((x + 4, 6 + bob, x + 11, 13 + bob), fill=body)
+        # Water highlight / fill line that bobs
+        draw.ellipse((x + 5, 7 + bob, x + 9, 10 + bob), fill=body_hi)
+        draw.point((x + 6, 8 + bob), fill=white)
+        # Neck + cork
+        draw.rectangle((x + 6, 3 + bob, x + 9, 6 + bob), fill=body_lo)
+        draw.rectangle((x + 6, 2 + bob, x + 9, 4 + bob), fill=cork)
+        draw.point((x + 7, 2 + bob), fill=cork_hi)
+        # Strap loop
+        draw.arc((x + 9, 4 + bob, x + 13, 8 + bob), 200, 40, fill=shade_color(base, 0.4), width=1)
+        # Bubble that drifts with the tick
+        draw.point((x + 9, 10 + bob - spark), fill=white)
+
+    elif kind == "leaf":  # Moss: a seed pod / pinecone bomb.
+        draw.ellipse((x + 3, 4 + bob, x + 12, 14 + bob), fill=shade_color(base, 0.45))
+        draw.ellipse((x + 4, 5 + bob, x + 11, 13 + bob), fill=base)
+        for row, y in enumerate((7, 9, 11)):
+            inset = row % 2
+            draw.line([(x + 5 + inset, y + bob), (x + 10 - inset, y + bob)], fill=accent)
+        draw.polygon([(x + 7, 3 + bob), (x + 9, 3 + bob), (x + 8, 1 + bob)], fill=accent)
+
+    elif kind == "band":  # Sunset: a glowing sun orb.
+        draw.ellipse((x + 2, 3 + bob, x + 13, 14 + bob), fill=shade_color(base, 0.5))
+        draw.ellipse((x + 3, 4 + bob, x + 12, 13 + bob), fill=base)
+        draw.ellipse((x + 5, 6 + bob, x + 10, 11 + bob), fill=accent)
+        draw.point((x + 6, 7 + bob), fill=white)
+        # Rays that tick
+        for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+            draw.point((x + 8 + dx * (3 + spark), 8 + bob + dy * (3 + spark)), fill=accent)
+
+    elif kind == "jewel":  # Royal: a cut gem.
+        draw.polygon(
+            [(x + 8, 2 + bob), (x + 13, 7 + bob), (x + 8, 14 + bob), (x + 2, 7 + bob)],
+            fill=shade_color(base, 0.55),
+        )
+        draw.polygon(
+            [(x + 8, 4 + bob), (x + 11, 7 + bob), (x + 8, 12 + bob), (x + 4, 7 + bob)],
+            fill=base,
+        )
+        draw.polygon(
+            [(x + 8, 5 + bob), (x + 10, 7 + bob), (x + 8, 9 + bob), (x + 6, 7 + bob)],
+            fill=accent,
+        )
+        draw.point((x + 7, 6 + bob), fill=white)
+
+    elif kind == "visor":  # Neon: a battery / energy cell.
+        draw.rectangle((x + 4, 3 + bob, x + 11, 13 + bob), fill=black)
+        draw.rectangle((x + 5, 4 + bob, x + 10, 12 + bob), fill=shade_color(base, 0.45))
+        level = 5 + (frame % 4)
+        draw.rectangle((x + 5, 12 - level + bob, x + 10, 12 + bob), fill=base)
+        draw.rectangle((x + 6, 12 - level + bob, x + 9, 12 - level + 1 + bob), fill=accent)
+        draw.rectangle((x + 6, 2 + bob, x + 9, 3 + bob), fill=accent)
+        draw.point((x + 6, 5 + bob), fill=white)
+
+    elif kind == "crystal":  # Frost: an ice chunk.
+        draw.polygon(
+            [(x + 8, 2 + bob), (x + 13, 8 + bob), (x + 10, 14 + bob), (x + 5, 14 + bob), (x + 2, 8 + bob)],
+            fill=shade_color(base, 0.55),
+        )
+        draw.polygon(
+            [(x + 8, 4 + bob), (x + 11, 8 + bob), (x + 9, 12 + bob), (x + 6, 12 + bob), (x + 4, 8 + bob)],
+            fill=base,
+        )
+        draw.line([(x + 7, 5 + bob), (x + 7, 11 + bob)], fill=white)
+        draw.point((x + 9, 7 + bob), fill=accent)
+
+    elif kind == "hood":  # Shadow: a dark urn / vial.
+        draw.ellipse((x + 3, 5 + bob, x + 12, 14 + bob), fill=shade_color(base, 0.4))
+        draw.ellipse((x + 4, 6 + bob, x + 11, 13 + bob), fill=base)
+        draw.rectangle((x + 6, 3 + bob, x + 9, 6 + bob), fill=shade_color(base, 0.3))
+        draw.ellipse((x + 5, 2 + bob, x + 10, 5 + bob), fill=black)
+        draw.point((x + 7, 8 + bob), fill=accent)
+        draw.point((x + 8, 9 + bob + spark), fill=accent)
+
+    elif kind == "stars":  # Galaxy: a tiny planet.
+        draw.ellipse((x + 2, 3 + bob, x + 13, 14 + bob), fill=shade_color(base, 0.5))
+        draw.ellipse((x + 3, 4 + bob, x + 12, 13 + bob), fill=base)
+        draw.arc((x + 1, 6 + bob, x + 14, 11 + bob), 200, 340, fill=accent, width=1)
+        draw.point((x + 6, 7 + bob), fill=white)
+        draw.point((x + 10, 10 + bob), fill=accent)
+        draw.point((x + 5 + spark, 5 + bob), fill=white)
+
+    elif kind == "crown":  # Crown: a gold coin pouch / treasure bag.
+        draw.ellipse((x + 3, 6 + bob, x + 12, 14 + bob), fill=shade_color(base, 0.55))
+        draw.ellipse((x + 4, 7 + bob, x + 11, 13 + bob), fill=base)
+        draw.polygon([(x + 5, 7 + bob), (x + 8, 3 + bob), (x + 11, 7 + bob)], fill=shade_color(base, 0.4))
+        draw.point((x + 8, 4 + bob), fill=accent)
+        draw.point((x + 6, 9 + bob), fill=accent)
+        draw.point((x + 9, 10 + bob), fill=white)
 
 
 def generate_bomb(slug, base, accent, decoration, player_color, player_tint):
-    source = Image.open(EFFECT_SOURCE / f"snes_bombs_{player_color}.png").convert("RGBA")
-    image = source.copy()
-    pixels = image.load()
-    for y in range(image.height):
-        for x in range(image.width):
-            red, green, blue, alpha = pixels[x, y]
-            if alpha and max(red, green, blue) > 80:
-                shade = 0.35 + 0.65 * (max(red, green, blue) / 255)
-                themed = tint(base, player_tint, shade)
-                body = tuple(
-                    round(original * 0.65 + themed_channel * 0.35)
-                    for original, themed_channel in zip((red, green, blue), themed)
-                )
-                pixels[x, y] = (*body, alpha)
+    # Four ticking frames — matches the SNES bomb sheet layout the renderer reads.
+    image = Image.new("RGBA", (64, 16))
     draw = ImageDraw.Draw(image)
-    for frame in range(image.width // 16):
-        decorate_bomb(
-            draw,
-            frame,
-            decoration,
-            tint(base, player_tint),
-            tint(accent, player_tint),
-        )
+    themed_base = tint(base, player_tint)
+    themed_accent = tint(accent, player_tint)
+    for frame in range(4):
+        draw_bomb(draw, frame, decoration, themed_base, themed_accent)
     image.save(OUTPUT / f"{slug}_{player_color}_bomb.png", optimize=True)
 
 
 def effect_orientation(row):
-    if row in (2, 4, 5):
-        return "vertical"
-    if row in (3, 6, 7):
-        return "horizontal"
-    return "center"
+    """Maps flame sheet rows to classic Bomberman blast parts."""
+    return {
+        1: "center",
+        2: "vertical",
+        3: "horizontal",
+        4: "endUp",
+        5: "endDown",
+        6: "endRight",
+        7: "endLeft",
+    }.get(row, "center")
+
+
+def draw_ember_blast(draw, left, top, base, accent, white, phase, orientation):
+    """Classic Bomberman cross blast, but hotter and more explosive for Ember."""
+    pulse = (0, 1, 2, 1, 0)[phase]
+    fleck = phase % 2
+
+    if orientation == "center":
+        # Blooming fireball with a white-hot core and flying sparks.
+        size = 5 + pulse
+        draw.ellipse(
+            (left + 7 - size, top + 7 - size, left + 8 + size, top + 8 + size),
+            fill=base,
+        )
+        draw.ellipse(
+            (left + 8 - size + 1, top + 8 - size + 1, left + 7 + size - 1, top + 7 + size - 1),
+            fill=accent,
+        )
+        core = 2 + (1 if pulse > 0 else 0)
+        draw.ellipse(
+            (left + 7 - core, top + 7 - core, left + 8 + core, top + 8 + core),
+            fill=white,
+        )
+        sparks = (
+            (2, 3), (13, 2), (14, 12), (1, 13),
+            (4, 1), (11, 14), (1, 7), (14, 8),
+        )
+        for index, (sx, sy) in enumerate(sparks):
+            if (index + phase) % 2 == 0:
+                draw.point((left + sx, top + sy), fill=accent if index % 3 else white)
+
+    elif orientation == "vertical":
+        draw.rectangle((left + 4 - pulse // 2, top, left + 11 + pulse // 2, top + 15), fill=base)
+        draw.rectangle((left + 6, top, left + 9, top + 15), fill=accent)
+        draw.rectangle((left + 7, top + 1, left + 8, top + 14), fill=white)
+        for y in (2, 6, 10, 13):
+            draw.point((left + 3 - fleck, top + y), fill=accent)
+            draw.point((left + 12 + fleck, top + y + 1), fill=white)
+
+    elif orientation == "horizontal":
+        draw.rectangle((left, top + 4 - pulse // 2, left + 15, top + 11 + pulse // 2), fill=base)
+        draw.rectangle((left, top + 6, left + 15, top + 9), fill=accent)
+        draw.rectangle((left + 1, top + 7, left + 14, top + 8), fill=white)
+        for x in (2, 6, 10, 13):
+            draw.point((left + x, top + 3 - fleck), fill=accent)
+            draw.point((left + x + 1, top + 12 + fleck), fill=white)
+
+    elif orientation == "endUp":
+        draw.polygon(
+            [(left + 3, top + 15), (left + 7 - pulse, top + 4), (left + 8, top + 1),
+             (left + 9 + pulse, top + 4), (left + 12, top + 15)],
+            fill=base,
+        )
+        draw.polygon(
+            [(left + 5, top + 15), (left + 7, top + 6), (left + 8, top + 3),
+             (left + 9, top + 6), (left + 10, top + 15)],
+            fill=accent,
+        )
+        draw.rectangle((left + 7, top + 6, left + 8, top + 15), fill=white)
+        draw.point((left + 4 + fleck, top + 8), fill=accent)
+        draw.point((left + 11 - fleck, top + 5), fill=white)
+
+    elif orientation == "endDown":
+        draw.polygon(
+            [(left + 3, top), (left + 7 - pulse, top + 11), (left + 8, top + 14),
+             (left + 9 + pulse, top + 11), (left + 12, top)],
+            fill=base,
+        )
+        draw.polygon(
+            [(left + 5, top), (left + 7, top + 9), (left + 8, top + 12),
+             (left + 9, top + 9), (left + 10, top)],
+            fill=accent,
+        )
+        draw.rectangle((left + 7, top, left + 8, top + 9), fill=white)
+        draw.point((left + 4 + fleck, top + 7), fill=accent)
+        draw.point((left + 11 - fleck, top + 10), fill=white)
+
+    elif orientation == "endRight":
+        draw.polygon(
+            [(left, top + 3), (left + 11, top + 7 - pulse), (left + 14, top + 8),
+             (left + 11, top + 9 + pulse), (left, top + 12)],
+            fill=base,
+        )
+        draw.polygon(
+            [(left, top + 5), (left + 9, top + 7), (left + 12, top + 8),
+             (left + 9, top + 9), (left, top + 10)],
+            fill=accent,
+        )
+        draw.rectangle((left, top + 7, left + 9, top + 8), fill=white)
+        draw.point((left + 7, top + 4 + fleck), fill=accent)
+        draw.point((left + 10, top + 11 - fleck), fill=white)
+
+    else:  # endLeft
+        draw.polygon(
+            [(left + 15, top + 3), (left + 4, top + 7 - pulse), (left + 1, top + 8),
+             (left + 4, top + 9 + pulse), (left + 15, top + 12)],
+            fill=base,
+        )
+        draw.polygon(
+            [(left + 15, top + 5), (left + 6, top + 7), (left + 3, top + 8),
+             (left + 6, top + 9), (left + 15, top + 10)],
+            fill=accent,
+        )
+        draw.rectangle((left + 6, top + 7, left + 15, top + 8), fill=white)
+        draw.point((left + 8, top + 4 + fleck), fill=accent)
+        draw.point((left + 5, top + 11 - fleck), fill=white)
 
 
 def draw_effect(draw, box, kind, base, accent, phase, orientation):
@@ -142,20 +343,19 @@ def draw_effect(draw, box, kind, base, accent, phase, orientation):
     white = (245, 250, 255, 255)
     base = (*base, 255)
     accent = (*accent, 255)
-    if kind == "horns":  # Ember: hotter, sharper fire.
-        draw.polygon(
-            [(left + 2, top + 15), (left + 4, top + 5 - pulse), (left + 7, top + 10),
-             (left + 9, top + 2 + pulse), (left + 14, top + 15)],
-            fill=base,
-        )
-        draw.polygon(
-            [(left + 5, top + 15), (left + 8, top + 7), (left + 11, top + 15)],
-            fill=accent,
-        )
+    axis = (
+        "vertical"
+        if orientation in ("vertical", "endUp", "endDown")
+        else "horizontal"
+        if orientation in ("horizontal", "endRight", "endLeft")
+        else "center"
+    )
+    if kind == "horns":  # Ember: classic cross blast, hotter and sparkier.
+        draw_ember_blast(draw, left, top, base, accent, white, phase, orientation)
     elif kind == "leaf":  # Moss: a rapidly growing thorny vine.
-        if orientation == "vertical":
+        if axis == "vertical":
             draw.line([(left + 8, top), (left + 8, top + 15)], fill=base, width=3)
-        elif orientation == "horizontal":
+        elif axis == "horizontal":
             draw.line([(left, top + 8), (left + 15, top + 8)], fill=base, width=3)
         else:
             draw.line([(left + 2, top + 13), (left + 13, top + 2)], fill=base, width=3)
@@ -168,7 +368,7 @@ def draw_effect(draw, box, kind, base, accent, phase, orientation):
         draw.ellipse((left + 3 + phase, top + 2, left + 5 + phase, top + 4), fill=white)
     elif kind == "band":  # Sunset: a band of solar light.
         draw.ellipse((left + 3 - pulse, top + 3 - pulse, left + 12 + pulse, top + 12 + pulse), fill=accent)
-        if orientation == "vertical":
+        if axis == "vertical":
             draw.rectangle((left + 6, top, left + 9, top + 15), fill=base)
         else:
             draw.rectangle((left, top + 6, left + 15, top + 9), fill=base)
@@ -177,10 +377,10 @@ def draw_effect(draw, box, kind, base, accent, phase, orientation):
         draw.polygon([(left + 8, top + 3 + pulse), (left + 11, top + 8), (left + 8, top + 12), (left + 5, top + 8)], fill=accent)
         draw.point((left + 4, top + 3), fill=white)
     elif kind == "visor":  # Neon: a hard laser with a bright core.
-        if orientation == "vertical":
+        if axis == "vertical":
             draw.rectangle((left + 4 - pulse, top, left + 11 + pulse, top + 15), fill=base)
             draw.rectangle((left + 7, top, left + 8, top + 15), fill=white)
-        elif orientation == "horizontal":
+        elif axis == "horizontal":
             draw.rectangle((left, top + 4 - pulse, left + 15, top + 11 + pulse), fill=base)
             draw.rectangle((left, top + 7, left + 15, top + 8), fill=white)
         else:

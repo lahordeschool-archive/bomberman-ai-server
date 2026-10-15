@@ -14,6 +14,7 @@ import {
   ArrowsOut,
   CloudArrowUp,
   Code,
+  Coins,
   Globe,
   PencilSimple,
   Play,
@@ -69,8 +70,11 @@ interface SavedCode {
 }
 
 const savedKey = (botId: string, versionId: string) => `v:${botId}:${versionId}`;
-const versionName = (version: { version: number; label: string | null }) =>
-  version.label ? `v${version.version} · ${version.label}` : `v${version.version}`;
+const versionName = (version: { version: number; label: string | null }) => {
+  const fallback = `v${version.version}`;
+  if (!version.label || version.label === fallback) return fallback;
+  return `${fallback} · ${version.label}`;
+};
 const isSaved = (key: string) => key.startsWith('v:');
 
 /** Replaces each random seat with a distinct house bot when possible. */
@@ -125,6 +129,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
   const [roomCode, setRoomCode] = useState('');
   const [renaming, setRenaming] = useState<string | null>(null);
   const [store, setStore] = useState<SkinStore | null>(null);
+  const [buyingSkin, setBuyingSkin] = useState<SkinSlug | null>(null);
   const [rankedOnSave, setRankedOnSave] = useState(true);
   const [expanded, setExpanded] = useState(() => localStorage.getItem(EXPANDED_KEY) === '1');
   const lineId = useRef(0);
@@ -475,6 +480,19 @@ export default function BotEditorPage({ botId }: { botId: string }) {
     }
   }
 
+  async function buySkin(skin: SkinSlug) {
+    setBuyingSkin(skin);
+    setActionError(null);
+    try {
+      setStore(await api.purchaseSkin(skin));
+      setBot(await api.equipSkin(botId, skin));
+    } catch (failure) {
+      setActionError((failure as Error).message);
+    } finally {
+      setBuyingSkin(null);
+    }
+  }
+
   async function rename(event: FormEvent) {
     event.preventDefault();
     const name = renaming?.trim() ?? '';
@@ -654,7 +672,8 @@ export default function BotEditorPage({ botId }: { botId: string }) {
               icon={<CloudArrowUp />}
               onClick={() => {
                 setSaveError(null);
-                setSaveLabel('');
+                const next = (bot?.versions[0]?.version ?? 0) + 1;
+                setSaveLabel(`v${next}`);
               }}
               disabled={source === null}
               aria-label="Save version"
@@ -768,51 +787,70 @@ export default function BotEditorPage({ botId }: { botId: string }) {
               <div>
                 <h2>Bot skin</h2>
                 <p className="muted">
-                  The arena automatically uses a different colour variant when players share a skin.
+                  Earn coins from ranked Elo to unlock skins. The arena uses a colour variant when
+                  players share a skin.
                 </p>
               </div>
-              <Link to={`/u/${user?.username ?? ''}`}>Open store</Link>
+              <span className="coin-balance">
+                <Coins weight="fill" /> {store?.balance ?? 0} coins
+              </span>
             </div>
-            <div className="skin-grid skin-grid-compact">
-              <button
-                type="button"
-                className={`skin-card skin-choice ${bot?.skin === null ? 'is-selected' : ''}`}
-                onClick={() => void equipSkin(null)}
-              >
+            <div className="skin-grid">
+              <article className={`skin-card ${bot?.skin === null ? 'is-selected' : ''}`}>
                 <div
                   className="skin-preview"
+                  role="img"
+                  aria-label="Classic skin preview"
                   style={{ backgroundImage: 'url(/game/sprites/snes_white.png)' }}
                 />
-                <strong>Classic</strong>
-                <small className="muted">Included</small>
-              </button>
-              {store?.skins
-                .filter((skin) => store.owned.includes(skin.slug as SkinSlug))
-                .map((skin) => (
-                  <button
-                    type="button"
-                    key={skin.slug}
-                    className={`skin-card skin-choice ${
-                      bot?.skin === skin.slug ? 'is-selected' : ''
-                    }`}
-                    onClick={() => void equipSkin(skin.slug as SkinSlug)}
+                <div>
+                  <strong>Classic</strong>
+                  <small className="muted">The default Bomber Arena look.</small>
+                </div>
+                <Button
+                  variant={bot?.skin === null ? 'secondary' : 'primary'}
+                  disabled={bot?.skin === null}
+                  onClick={() => void equipSkin(null)}
+                >
+                  {bot?.skin === null ? 'Equipped' : 'Equip'}
+                </Button>
+              </article>
+              {store?.skins.map((skin) => {
+                const slug = skin.slug as SkinSlug;
+                const owned = store.owned.includes(slug);
+                const equipped = bot?.skin === slug;
+                const canBuy = !owned && store.balance >= skin.price;
+                const busy = buyingSkin === slug;
+                return (
+                  <article
+                    className={`skin-card ${equipped ? 'is-selected' : ''}`}
+                    key={slug}
                   >
                     <div
                       className="skin-preview"
+                      role="img"
+                      aria-label={`${skin.name} skin preview`}
                       style={{
-                        backgroundImage: `url(/game/skins/${skin.slug}_white.png)`,
+                        backgroundImage: `url(/game/skins/${slug}_white.png)`,
                       }}
                     />
-                    <strong>{skin.name}</strong>
-                    <small className="muted">
-                      {bot?.skin === skin.slug ? 'Equipped' : 'Equip'}
-                    </small>
-                  </button>
-                ))}
+                    <div>
+                      <strong>{skin.name}</strong>
+                      <small className="muted">{skin.description}</small>
+                    </div>
+                    <Button
+                      variant={owned && !equipped ? 'primary' : owned ? 'secondary' : 'primary'}
+                      disabled={busy || equipped || (!owned && !canBuy)}
+                      busy={busy}
+                      onClick={() => void (owned ? equipSkin(slug) : buySkin(slug))}
+                    >
+                      {equipped ? 'Equipped' : owned ? 'Equip' : `${skin.price} coins`}
+                    </Button>
+                  </article>
+                );
+              })}
             </div>
-            {store && store.owned.length === 0 ? (
-              <p className="muted">You have no custom skins yet. Visit your profile store.</p>
-            ) : null}
+            {!store ? <Skeleton lines={2} /> : null}
             <ErrorMessage>{actionError}</ErrorMessage>
           </Card>
         </div>
@@ -1002,11 +1040,11 @@ export default function BotEditorPage({ botId }: { botId: string }) {
             label="Version name"
             value={saveLabel ?? ''}
             onChange={(event) => setSaveLabel(event.target.value)}
-            placeholder="Bombs only when cornered"
+            placeholder={`v${(bot?.versions[0]?.version ?? 0) + 1}`}
             maxLength={60}
             required
             autoFocus
-            hint={`Saved as v${(bot?.versions[0]?.version ?? 0) + 1}. It becomes the version used for ranked play.`}
+            hint="You can rename it, or keep the default. It becomes the version used for ranked play."
           />
           <label className="checkbox">
             <input

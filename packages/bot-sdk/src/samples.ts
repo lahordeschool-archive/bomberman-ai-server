@@ -16,6 +16,7 @@ export const STARTER_SOURCE = `/**
  *   obs.bombs        { x, y, ownerId, ticksLeft, range }
  *   obs.flames       { x, y, ticksLeft }  standing in a flame kills you
  *   obs.items        { x, y, type }  extraBomb, flameUp, maxFlame, speedUp, speedDown
+ *   obs.closing      { x, y, ticksLeft }  tiles turning into walls soon, get off them
  *
  * Return "MOVE UP" | "MOVE DOWN" | "MOVE LEFT" | "MOVE RIGHT" | "PLANT BOMB" | "NOTHING".
  * Globals persist between calls, console.log output shows up in the editor console.
@@ -88,6 +89,7 @@ function threatMap(obs, extraBomb) {
       }
     }
   }
+  for (const tile of obs.closing || []) threat[tile.y][tile.x] = 0;
   return threat;
 }
 
@@ -214,6 +216,8 @@ function threatMap(obs, extraBomb) {
   for (const bomb of bombs) {
     for (const [x, y] of bomb.cells) threat[y][x] = Math.min(threat[y][x], bomb.timer);
   }
+  // Closing tiles become walls for good: treat them as burning already.
+  for (const tile of obs.closing || []) threat[tile.y][tile.x] = 0;
   return threat;
 }
 

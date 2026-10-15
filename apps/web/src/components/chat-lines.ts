@@ -50,6 +50,39 @@ export function appendLines(lines: ChatLine[], ...batches: ChatLine[][]): ChatLi
   return next.length === lines.length ? lines : next.slice(-CHAT_KEEP);
 }
 
+/** The text of the most recent TV note, if any. */
+export const lastNote = (lines: ChatLine[]): string | null =>
+  lines.findLast((line) => line.from.kind === 'system')?.text ?? null;
+
+const isChatLine = (value: unknown): value is ChatLine => {
+  const line = value as Partial<ChatLine> | null;
+  return (
+    typeof line?.key === 'string' &&
+    typeof line.at === 'number' &&
+    typeof line.text === 'string' &&
+    typeof line.from?.kind === 'string'
+  );
+};
+
+/** Restores the chat saved by {@link saveLines}; anything unreadable starts it empty. */
+export function loadLines(storageKey: string): ChatLine[] {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(storageKey) ?? '[]');
+    return Array.isArray(saved) ? saved.filter(isChatLine).slice(-CHAT_KEEP) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Keeps the chat across page loads; storage being full or blocked only loses the history. */
+export function saveLines(storageKey: string, lines: ChatLine[]): void {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(lines.slice(-CHAT_KEEP)));
+  } catch {
+    // The live chat keeps working without it.
+  }
+}
+
 export type ChatBlock =
   | { kind: 'line'; line: ChatLine }
   | { kind: 'fold'; key: string; folded: ChatLine[]; latest: ChatLine };

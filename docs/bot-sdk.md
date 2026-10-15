@@ -143,6 +143,7 @@ interface Observation {
   bombs: { x; y; ownerId; ticksLeft; range }[];
   flames: { x; y; ticksLeft }[]; // standing in a flame kills you
   items: { x; y; type }[]; // visible power ups
+  closing: { x; y; ticksLeft }[]; // tiles turning into walls within 3 s, soonest first
 }
 
 interface Player {
@@ -171,8 +172,11 @@ Item types: `extraBomb`, `flameUp`, `maxFlame`, `speedUp`, `speedDown` (see
 - A player switches tiles halfway through a move, so `x`/`y` may jump before the
   animation ends.
 - When a player dies, the power ups they collected are scattered on free tiles.
-- At 1:00 and 2:00, the indestructible outer walls advance inward by one complete
-  ring. Players caught in the closing ring die, and covered bombs and items disappear.
+- At 1:00 and 2:00, the indestructible outer walls advance inward by one ring. The
+  ring closes one tile every 2 ticks, clockwise from its top left corner, and each
+  tile shows up in `closing` 60 ticks (3 s) before it closes. Bombs, flames and items
+  on a closing tile disappear. A player still on it is pushed to a free neighbouring
+  tile, inward first (no wall, bomb or flame), and is crushed only when there is none.
 - A match ends when one bot (or none) is left, or after `maxTicks` (3 minutes).
   Survivors rank above the dead and are ordered by score
   (kill 100, wall 5, item 10); the dead are ordered by survival time, then score.

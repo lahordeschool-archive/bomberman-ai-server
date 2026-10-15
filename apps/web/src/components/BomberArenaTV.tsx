@@ -20,7 +20,15 @@ import { buildTimeline, type ReplayTimeline } from '../game/timeline.ts';
 import { api } from '../lib/api.ts';
 import { emitWithAck, getSocket } from '../lib/socket.ts';
 import { MatchBrowser } from './MatchBrowser.tsx';
-import { appendLines, type ChatLine, chatLine, systemLine } from './chat-lines.ts';
+import {
+  appendLines,
+  type ChatLine,
+  chatLine,
+  lastNote,
+  loadLines,
+  saveLines,
+  systemLine,
+} from './chat-lines.ts';
 import { MatchChat } from './MatchChat.tsx';
 import { KIND_LABEL } from './MatchList.tsx';
 import { Button } from './ui.tsx';
@@ -65,7 +73,13 @@ export function BomberArenaTV({
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [result, setResult] = useState<MatchResult | null>(null);
   const [viewers, setViewers] = useState<number | null>(null);
-  const [chat, setChat] = useState<ChatLine[]>([]);
+  const chatStorageKey = username ? `bomber-arena:chat:${username}` : null;
+  const [chat, setChat] = useState<ChatLine[]>(() =>
+    chatStorageKey ? loadLines(chatStorageKey) : [],
+  );
+  useEffect(() => {
+    if (chatStorageKey) saveLines(chatStorageKey, chat);
+  }, [chatStorageKey, chat]);
   const [renderer, setRenderer] = useState<ArenaRenderer | null>(null);
   const [muted, setMuted] = useState(true);
   const section = useRef<HTMLElement>(null);
@@ -208,16 +222,11 @@ export function BomberArenaTV({
         setSnapshot(init.snapshot);
         rendererRef.current?.reset(init.snapshot);
         moveChat(matchId);
+        const note = `Now watching ${init.participants.map((participant) => participant.name).join(' vs ')}`;
         setChat((lines) =>
           appendLines(
             lines,
-            announce
-              ? [
-                  systemLine(
-                    `Now watching ${init.participants.map((participant) => participant.name).join(' vs ')}`,
-                  ),
-                ]
-              : [],
+            announce && lastNote(lines) !== note ? [systemLine(note)] : [],
             init.chat.map(chatLine),
           ),
         );

@@ -5,10 +5,11 @@
  * v4: v3 plus tiebreakers on equal scores (kills, then walls, then items).
  * v5: v4 plus seeded arena width and scene variations.
  * v6: v5 plus hard-wall arena shrinking after each of the first two minutes.
+ * v7: rings close tile by tile after a warning, pushing caught players inward.
  */
-export const ENGINE_VERSION = 6;
+export const ENGINE_VERSION = 7;
 /** Versions `runReplay` can still re-simulate. */
-export const SUPPORTED_ENGINE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6];
+export const SUPPORTED_ENGINE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
 
 export const TICK_MS = 50;
 export const GRID_WIDTH = 15;
@@ -34,9 +35,13 @@ export const TURN_TICKS_BY_SPEED_V2: readonly number[] = [8, 5, 4, 3];
 export const BOMB_FUSE_TICKS = 50;
 export const FLAME_TICKS = 10;
 export const DEFAULT_MAX_TICKS = 3 * 60 * (1000 / TICK_MS);
-/** Engine v6 closes one complete outer ring at one and two minutes. */
+/** An outer ring closes at one and two minutes: at once in v6, starting then in v7. */
 export const ARENA_SHRINK_INTERVAL_TICKS = 60 * (1000 / TICK_MS);
 export const ARENA_SHRINK_RINGS = 2;
+/** Engine v7 closes a ring one tile at a time, clockwise from its top left corner. */
+export const ARENA_SHRINK_TILE_TICKS = 2;
+/** Engine v7 announces each closing tile this long before it closes (3 s). */
+export const ARENA_SHRINK_WARNING_TICKS = 60;
 
 export const SOFT_WALL_DENSITY = 0.85;
 export const ITEM_CHANCE = 0.2;

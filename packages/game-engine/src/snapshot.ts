@@ -1,6 +1,6 @@
 import type { Direction, ItemType } from './constants.ts';
-import { playerScore } from './engine.ts';
-import type { FlameKind, GameEvent, GameState, MatchResult } from './types.ts';
+import { closingWarnings, playerScore } from './engine.ts';
+import type { ClosingWarning, FlameKind, GameEvent, GameState, MatchResult } from './types.ts';
 
 export interface SnapshotPlayer {
   id: number;
@@ -32,6 +32,8 @@ export interface Snapshot {
   bombs: { id: number; x: number; y: number; ownerId: number; fuse: number }[];
   flames: { x: number; y: number; kind: FlameKind; ownerId: number }[];
   items: { x: number; y: number; type: ItemType }[];
+  /** Tiles about to turn into hard walls. */
+  closing: ClosingWarning[];
   events: GameEvent[];
   result: MatchResult | null;
 }
@@ -67,6 +69,7 @@ export function toSnapshot(state: GameState, events: GameEvent[] = state.events)
     bombs: state.bombs.map(({ id, x, y, ownerId, fuse }) => ({ id, x, y, ownerId, fuse })),
     flames: state.flames.map(({ x, y, kind, ownerId }) => ({ x, y, kind, ownerId })),
     items: state.items.filter((item) => !item.hidden).map(({ x, y, type }) => ({ x, y, type })),
+    closing: closingWarnings(state),
     events,
     result: state.result,
   };

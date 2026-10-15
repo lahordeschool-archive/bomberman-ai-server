@@ -1338,9 +1338,6 @@ button.match-row[aria-pressed='true'] {
   margin-top: 0;
 }
 
-.skin-store {
-  margin-bottom: var(--space-5);
-}
 .coin-balance {
   display: inline-flex;
   flex: none;
@@ -1356,9 +1353,6 @@ button.match-row[aria-pressed='true'] {
   gap: var(--space-3);
   margin-top: var(--space-4);
 }
-.skin-grid-compact {
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-}
 .skin-card {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
@@ -1372,22 +1366,16 @@ button.match-row[aria-pressed='true'] {
   color: var(--text);
   text-align: left;
 }
+.skin-card.is-selected {
+  border-color: var(--accent);
+  background: var(--surface-4);
+}
 .skin-card > div:not(.skin-preview) {
   display: grid;
   min-width: 0;
 }
 .skin-card > .button {
   grid-column: 1 / -1;
-}
-.skin-choice {
-  grid-template-columns: 56px minmax(0, 1fr);
-  font: inherit;
-  cursor: pointer;
-}
-.skin-choice:hover,
-.skin-choice.is-selected {
-  border-color: var(--accent);
-  background: var(--surface-4);
 }
 .skin-preview {
   width: 51px;
@@ -1575,10 +1563,16 @@ button.match-row[aria-pressed='true'] {
   width: auto;
   height: 100%;
   max-width: 100%;
-  transition: opacity 700ms var(--ease);
 }
-.tv-arena.is-idle .arena-canvas {
-  opacity: 0.35;
+/* Dim the board without opacity on the canvas — that breaks Firefox WebGL compositing
+   (black on screen, fine in screenshots). */
+.tv-arena.is-idle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.65);
+  pointer-events: none;
+  transition: opacity 700ms var(--ease);
 }
 .tv-arena .arena-sound {
   top: 0;

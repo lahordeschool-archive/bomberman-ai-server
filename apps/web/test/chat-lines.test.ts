@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   appendLines,
   CHAT_KEEP,
   type ChatLine,
+  lastNote,
+  loadLines,
+  saveLines,
   systemLine,
   toBlocks,
 } from '../src/components/chat-lines.ts';
@@ -64,5 +67,34 @@ describe('appendLines', () => {
     const lines = appendLines([first], [first], many);
     expect(lines).toHaveLength(CHAT_KEEP);
     expect(lines.at(-1)!.text).toBe(`m${CHAT_KEEP + 4}`);
+  });
+});
+
+describe('saved chat', () => {
+  const store = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => store.set(key, value),
+  });
+
+  it('restores the lines it saved, the most recent ones only', () => {
+    const many = Array.from({ length: CHAT_KEEP + 3 }, (_, index) => user(`s${index}`));
+    saveLines('chat', many);
+    const restored = loadLines('chat');
+    expect(restored).toHaveLength(CHAT_KEEP);
+    expect(restored.at(-1)).toEqual(many.at(-1));
+  });
+
+  it('starts empty from missing or unreadable storage, skipping bad lines', () => {
+    expect(loadLines('nothing')).toEqual([]);
+    store.set('broken', '{not json');
+    expect(loadLines('broken')).toEqual([]);
+    store.set('mixed', JSON.stringify([{ text: 'no key' }, user('kept')]));
+    expect(loadLines('mixed').map((line) => line.text)).toEqual(['kept']);
+  });
+
+  it('finds the latest note', () => {
+    expect(lastNote([user('hi')])).toBeNull();
+    expect(lastNote([note('a'), user('hi'), note('b'), user('yo')])).toBe('b');
   });
 });

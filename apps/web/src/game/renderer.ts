@@ -12,10 +12,21 @@ import {
   TILE_SIZE,
 } from '@bomberman/game-engine';
 import { SKINS, type SkinSlug } from '@bomberman/protocol';
+import { SWATCHES } from './Scoreboard.tsx';
 
 const WIDTH = GRID_WIDTH * TILE_SIZE;
 const HEIGHT = GRID_HEIGHT * TILE_SIZE;
 const ASSETS = '/game';
+
+/**
+ * Firefox often fails to composite WebGL canvases to the screen (black viewport)
+ * while OS screenshots still capture the GPU buffer correctly. Canvas2D is plenty
+ * for this pixel-art board and avoids that compositor bug.
+ */
+const RENDER_TYPE =
+  typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent)
+    ? Phaser.CANVAS
+    : Phaser.AUTO;
 
 const TILE_FRAMES = { hard: 1, soft: 2, grass: 3, shadow: 4 } as const;
 const IDLE_FRAMES = { up: 1, left: 4, down: 7, right: 10 } as const;
@@ -30,6 +41,7 @@ const FLAME_ANIMATIONS: Record<FlameKind, { name: string; frames: number[] }> = 
 };
 
 const colorOf = (playerId: number) => PLAYER_COLORS[playerId % PLAYER_COLORS.length]!;
+const markerColor = (slot: number) => Number.parseInt(SWATCHES[colorOf(slot)].slice(1), 16);
 const cellKey = (x: number, y: number) => `${x},${y}`;
 const tileKey = (theme: Snapshot['theme'], kind: 'floor' | 'hard' | 'soft') =>
   theme === 'grass' ? 'tiles' : `${theme}-${kind}`;
@@ -61,6 +73,8 @@ class ArenaScene extends Phaser.Scene {
   private markers = new Map<number, Phaser.GameObjects.Graphics>();
   private highlighted: readonly number[] = [];
   private playerSkins = new Map<number, SkinSlug>();
+  private closingOverlay: Phaser.GameObjects.Graphics | null = null;
+  private closingAnnounced = false;
   private halted = false;
   muted = true;
 
@@ -126,6 +140,7 @@ class ArenaScene extends Phaser.Scene {
     }
 
     this.createThemeTextures();
+    this.closingOverlay = this.add.graphics().setDepth(4);
     this.ready = true;
     this.setHighlighted(this.highlighted);
     if (this.queued) {
@@ -205,25 +220,49 @@ class ArenaScene extends Phaser.Scene {
     }
   }
 
-  /** Draws a small red arrow above the given player slots (your own bots). */
+  /** Marks your own bot slots with an arrow; every other player gets a round pin. */
   setHighlighted(slots: readonly number[]): void {
     this.highlighted = slots;
     if (!this.ready) return;
+    this.refreshMarkers();
+  }
+
+  /** One marker per living player: arrow for you, dot for others, in their scoreboard color. */
+  private refreshMarkers(): void {
     for (const [slot, marker] of this.markers) {
-      if (!slots.includes(slot)) {
+      if (!this.players.has(slot)) {
         marker.destroy();
         this.markers.delete(slot);
       }
     }
-    for (const slot of slots) {
-      if (this.markers.has(slot)) continue;
-      const marker = this.add.graphics().setDepth(100).setVisible(false);
+    for (const slot of this.players.keys()) {
+      let marker = this.markers.get(slot);
+      if (!marker) {
+        marker = this.add.graphics().setDepth(100).setVisible(false);
+        this.markers.set(slot, marker);
+      }
+      this.drawMarker(marker, slot, this.highlighted.includes(slot));
+    }
+  }
+
+  private drawMarker(
+    marker: Phaser.GameObjects.Graphics,
+    slot: number,
+    isOwn: boolean,
+  ): void {
+    const fill = markerColor(slot);
+    marker.clear();
+    if (isOwn) {
       marker.fillStyle(0x000000, 0.75);
       marker.fillTriangle(-6, -5, 6, -5, 0, 3);
-      marker.fillStyle(0xff3b30, 1);
+      marker.fillStyle(fill, 1);
       marker.fillTriangle(-5, -4, 5, -4, 0, 1);
-      this.markers.set(slot, marker);
+      return;
     }
+    marker.fillStyle(0x000000, 0.75);
+    marker.fillCircle(0, -1, 4.5);
+    marker.fillStyle(fill, 1);
+    marker.fillCircle(0, -1, 3.5);
   }
 
   setPlayerSkins(skins: ReadonlyMap<number, SkinSlug>): void {
@@ -262,11 +301,13 @@ class ArenaScene extends Phaser.Scene {
     for (const { sprite } of this.bombs.values()) sprite.destroy();
     for (const { sprite } of this.flames.values()) sprite.destroy();
     for (const { sprite } of this.players.values()) sprite.destroy();
+    for (const marker of this.markers.values()) marker.destroy();
     this.walls.clear();
     this.items.clear();
     this.bombs.clear();
     this.flames.clear();
     this.players.clear();
+    this.markers.clear();
     this.halted = false;
   }
 
@@ -304,11 +345,13 @@ class ArenaScene extends Phaser.Scene {
       if (event.type === 'bombExploded' && !instant && !this.muted) {
         this.sound.play('explosion', { volume: 0.25 });
       }
+      if (event.type === 'tileClosed' && !instant) this.dropBlock(snapshot, event.x, event.y);
     }
     this.syncWalls(snapshot, wallOwners, instant);
     this.syncItems(snapshot);
     this.syncBombs(snapshot);
     this.syncFlames(snapshot);
+    this.syncClosing(snapshot, instant);
     for (const player of snapshot.players) this.syncPlayer(player, instant);
     if (snapshot.status === 'finished') this.halt();
   }
@@ -518,6 +561,64 @@ class ArenaScene extends Phaser.Scene {
     }
   }
 
+  /** Blinks the tiles about to close, faster near the end, and calls the first warning out. */
+  private syncClosing(snapshot: Snapshot, instant: boolean): void {
+    const overlay = this.closingOverlay!;
+    overlay.clear();
+    for (const tile of snapshot.closing) {
+      const lit = Math.floor(tile.ticksLeft / (tile.ticksLeft > 20 ? 6 : 3)) % 2 === 0;
+      overlay.fillStyle(0xff3b30, lit ? 0.55 : 0.18);
+      overlay.fillRect(tile.x * TILE_SIZE, tile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    }
+    const warning = snapshot.closing.length > 0;
+    if (warning && !this.closingAnnounced && !instant) this.hurryUp(snapshot);
+    this.closingAnnounced = warning;
+  }
+
+  private hurryUp(snapshot: Snapshot): void {
+    const banner = this.add
+      .text((snapshot.width * TILE_SIZE) / 2, this.arenaHeight / 2, 'HURRY UP!', {
+        fontFamily: 'monospace',
+        fontSize: '22px',
+        fontStyle: 'bold',
+        color: '#ffd60a',
+        stroke: '#9b0d14',
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+      .setDepth(200)
+      .setScale(0.4);
+    this.tweens.chain({
+      targets: banner,
+      tweens: [
+        { scale: 1, duration: 220, ease: 'Back.easeOut' },
+        { alpha: 0.35, duration: 160, yoyo: true, repeat: 3 },
+        { alpha: 0, y: banner.y - 10, duration: 260, onComplete: () => banner.destroy() },
+      ],
+    });
+  }
+
+  /** A hard block falling into a tile that just closed. */
+  private dropBlock(snapshot: Snapshot, x: number, y: number): void {
+    const grass = snapshot.theme === 'grass';
+    const block = this.add
+      .image(
+        x * TILE_SIZE,
+        (y - 1) * TILE_SIZE,
+        tileKey(snapshot.theme, 'hard'),
+        grass ? TILE_FRAMES.hard : undefined,
+      )
+      .setOrigin(0, 0)
+      .setDepth(9);
+    this.tweens.add({
+      targets: block,
+      y: y * TILE_SIZE,
+      duration: 110,
+      ease: 'Quad.easeIn',
+      onComplete: () => block.destroy(),
+    });
+  }
+
   private syncPlayer(player: SnapshotPlayer, instant: boolean): void {
     const appearance = this.appearanceOf(player.id);
     const targetX = player.px * TILE_SIZE + TILE_SIZE / 2;
@@ -530,6 +631,7 @@ class ArenaScene extends Phaser.Scene {
         .setDepth(10);
       entry = { sprite, targetX, targetY, alive: true, facing: player.facing, appearance };
       this.players.set(player.id, entry);
+      this.refreshMarkers();
       if (!player.alive) {
         entry.alive = false;
         sprite.setVisible(false);
@@ -585,13 +687,15 @@ export class ArenaRenderer {
     parent.style.removeProperty('height');
     const scene = new ArenaScene();
     this.game = new Phaser.Game({
-      type: Phaser.AUTO,
+      type: RENDER_TYPE,
       parent,
       width: WIDTH,
       height: HEIGHT,
       pixelArt: true,
       backgroundColor: '#000000',
       banner: false,
+      // Avoid CSS opacity on the canvas: Firefox + WebGL then paints black on screen
+      // (screenshots still look fine). Idle dimming is handled by a CSS overlay instead.
       scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -650,6 +754,7 @@ export class ArenaRenderer {
     this.scene?.halt();
   }
 
+  /** Your bot slots get an arrow pin; everyone else gets a colored round pin. */
   setHighlighted(slots: readonly number[]): void {
     this.highlighted = slots;
     this.scene?.setHighlighted(slots);

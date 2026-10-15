@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ARENA_SHRINK_INTERVAL_TICKS,
+  closingSchedule,
   createGame,
+  type GameState,
   hashState,
+  type PlayerState,
   runReplay,
   step,
   turnTicks,
@@ -22,6 +24,11 @@ import {
   STARTER_SOURCE,
 } from '../src/index.ts';
 import { createVmController } from './vm-controller.ts';
+
+const crushedByArena = (state: GameState, player: PlayerState) =>
+  closingSchedule(state.width, state.height).some(
+    (tile) => tile.tick === player.diedAtTick! + 1 && tile.x === player.x && tile.y === player.y,
+  );
 
 describe('parseAction', () => {
   it.each([
@@ -224,9 +231,9 @@ describe('sample bots and match loop', () => {
       });
       if (state.result!.winnerId === 0) bomberWins++;
       const player = state.players[0]!;
-      const arenaCrush =
-        player.diedAtTick !== null && (player.diedAtTick + 1) % ARENA_SHRINK_INTERVAL_TICKS === 0;
-      if (!player.alive && player.killedBy === null && !arenaCrush) bomberSelfKills++;
+      if (!player.alive && player.killedBy === null && !crushedByArena(state, player)) {
+        bomberSelfKills++;
+      }
     }
     expect(bomberSelfKills).toBeLessThanOrEqual(1);
     expect(bomberWins).toBeGreaterThanOrEqual(4);
@@ -251,9 +258,9 @@ describe('sample bots and match loop', () => {
         const entry = games.get(bot.slug)!;
         entry.played++;
         const player = state.players[id]!;
-        const arenaCrush =
-          player.diedAtTick !== null && (player.diedAtTick + 1) % ARENA_SHRINK_INTERVAL_TICKS === 0;
-        if (!player.alive && player.killedBy === null && !arenaCrush) entry.self++;
+        if (!player.alive && player.killedBy === null && !crushedByArena(state, player)) {
+          entry.self++;
+        }
         entry.bombs += intents.filter((i) => i.playerId === id && i.intent.type === 'bomb').length;
       });
     }

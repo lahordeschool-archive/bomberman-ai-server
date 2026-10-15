@@ -17,6 +17,7 @@ export interface ReplayTimeline {
 /** Re-simulates a ranked match locally from its seed and intent log, then checks the hash. */
 export function buildTimeline(replay: ReplayResponse): ReplayTimeline {
   const initial = createGame({
+    engineVersion: replay.engineVersion,
     seed: replay.seed,
     playerCount: replay.playerCount,
     settings: replay.settings,
