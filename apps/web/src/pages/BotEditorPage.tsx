@@ -84,7 +84,7 @@ function drawOpponents(slugs: readonly string[]): string[] {
 const MAX_CONSOLE_LINES = 300;
 const EXPANDED_KEY = 'bomber:editor-expanded';
 
-type Panel = 'test' | 'online' | 'ranked';
+type Panel = 'online' | 'ranked';
 type ConfigTab = 'code' | 'skins' | 'play';
 
 function draftKey(botId: string) {
@@ -374,7 +374,6 @@ export default function BotEditorPage({ botId }: { botId: string }) {
         .join(', ')}.`,
     );
     setDrawn(lineup);
-    setConfigTab('play');
     void local.start(players);
   }
 
@@ -687,6 +686,81 @@ export default function BotEditorPage({ botId }: { botId: string }) {
           <ConsolePanel lines={lines} onClear={() => setLines([])} />
         </div>
 
+        <div className="arena-column" hidden={configTab !== 'code'}>
+          <div className="editor-header-meta mono">
+            {bot?.activeVersion ? (
+              <span>v{bot.activeVersion.version}</span>
+            ) : (
+              <span>No version yet</span>
+            )}
+            {source !== null && source !== (activeSource ?? STARTER_SOURCE) ? (
+              <span className="badge" title="The editor differs from the active version">
+                Unsaved changes
+              </span>
+            ) : null}
+            {bot?.rating ? <span>{formatRating(bot.rating.rating)} rating</span> : null}
+            {bot?.queued ? <span className="badge badge-live">Queued</span> : null}
+          </div>
+          <div className="arena-frame">
+            <ArenaCanvas onReady={setRenderer} label="Match arena" />
+            <button
+              type="button"
+              className="icon-button arena-sound"
+              onClick={() => setMuted((value) => !value)}
+              aria-label={muted ? 'Turn sound on' : 'Turn sound off'}
+            >
+              {muted ? <SpeakerSlash /> : <SpeakerHigh />}
+            </button>
+          </div>
+          <Scoreboard
+            snapshot={snapshot}
+            entries={scoreEntries}
+            maxTicks={DEFAULT_MAX_TICKS}
+            mode={running || casual.match ? 'live' : 'idle'}
+          />
+          <Card className="panel local-test-panel">
+            <h2>Test match</h2>
+            <p className="muted">
+              Runs entirely in your browser. Your draft plays as {participants[0]!.name}.
+            </p>
+            {[0, 1, 2].map((index) => (
+              <label key={index} className="select-field">
+                Opponent {index + 1}
+                <select
+                  value={opponents[index] ?? ''}
+                  onChange={(event) => {
+                    const next = [...opponents];
+                    if (event.target.value) next[index] = event.target.value;
+                    else next.splice(index, 1);
+                    setOpponents(next.filter(Boolean));
+                    setDrawn(null);
+                  }}
+                  disabled={index > opponents.length}
+                >
+                  {index > 0 ? <option value="">None</option> : null}
+                  <option value={RANDOM}>Random house bot</option>
+                  <optgroup label="House bots">
+                    {SAMPLE_BOTS.map((sample) => (
+                      <option key={sample.slug} value={sample.slug}>
+                        {sample.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                  {savedCode.own.length + savedCode.others.length > 0 ? (
+                    <optgroup label="Your saved versions">
+                      {[...savedCode.own, ...savedCode.others].map((entry) => (
+                        <option key={entry.key} value={entry.key}>
+                          {entry.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null}
+                </select>
+              </label>
+            ))}
+          </Card>
+        </div>
+
         <div className="skin-config" hidden={configTab !== 'skins'}>
           <Card>
             <div className="card-header">
@@ -742,44 +816,11 @@ export default function BotEditorPage({ botId }: { botId: string }) {
           </Card>
         </div>
 
-        <div className="arena-column" hidden={configTab !== 'play'}>
-          <div className="editor-header-meta mono">
-            {bot?.activeVersion ? (
-              <span>v{bot.activeVersion.version}</span>
-            ) : (
-              <span>No version yet</span>
-            )}
-            {source !== null && source !== (activeSource ?? STARTER_SOURCE) ? (
-              <span className="badge" title="The editor differs from the active version">
-                Unsaved changes
-              </span>
-            ) : null}
-            {bot?.rating ? <span>{formatRating(bot.rating.rating)} rating</span> : null}
-            {bot?.queued ? <span className="badge badge-live">Queued</span> : null}
-          </div>
-          <div className="arena-frame">
-            <ArenaCanvas onReady={setRenderer} label="Match arena" />
-            <button
-              type="button"
-              className="icon-button arena-sound"
-              onClick={() => setMuted((value) => !value)}
-              aria-label={muted ? 'Turn sound on' : 'Turn sound off'}
-            >
-              {muted ? <SpeakerSlash /> : <SpeakerHigh />}
-            </button>
-          </div>
-          <Scoreboard
-            snapshot={snapshot}
-            entries={scoreEntries}
-            maxTicks={DEFAULT_MAX_TICKS}
-            mode={running || casual.match ? 'live' : 'idle'}
-          />
-
+        <div className="play-config" hidden={configTab !== 'play'}>
           <div className="tabs" role="tablist" aria-label="Match modes">
             {(
               [
                 ['ranked', 'Ranked', <Trophy key="i" />],
-                ['test', 'Local test', <Play key="i" />],
                 ['online', 'Online casual', <Globe key="i" />],
               ] as const
             ).map(([id, label, icon]) => (
@@ -796,49 +837,6 @@ export default function BotEditorPage({ botId }: { botId: string }) {
               </button>
             ))}
           </div>
-
-          {panel === 'test' ? (
-            <Card className="panel">
-              <p className="muted">
-                Runs entirely in your browser. Your draft plays as {participants[0]!.name}.
-              </p>
-              {[0, 1, 2].map((index) => (
-                <label key={index} className="select-field">
-                  Opponent {index + 1}
-                  <select
-                    value={opponents[index] ?? ''}
-                    onChange={(event) => {
-                      const next = [...opponents];
-                      if (event.target.value) next[index] = event.target.value;
-                      else next.splice(index, 1);
-                      setOpponents(next.filter(Boolean));
-                      setDrawn(null);
-                    }}
-                    disabled={index > opponents.length}
-                  >
-                    {index > 0 ? <option value="">None</option> : null}
-                    <option value={RANDOM}>Random house bot</option>
-                    <optgroup label="House bots">
-                      {SAMPLE_BOTS.map((sample) => (
-                        <option key={sample.slug} value={sample.slug}>
-                          {sample.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                    {savedCode.own.length + savedCode.others.length > 0 ? (
-                      <optgroup label="Your saved versions">
-                        {[...savedCode.own, ...savedCode.others].map((entry) => (
-                          <option key={entry.key} value={entry.key}>
-                            {entry.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ) : null}
-                  </select>
-                </label>
-              ))}
-            </Card>
-          ) : null}
 
           {panel === 'online' ? (
             <Card className="panel">

@@ -1135,13 +1135,21 @@ a.match-row:hover {
   margin-bottom: var(--space-4);
 }
 .editor-tab-content {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr);
 }
 .editor-tab-content > [hidden] {
   display: none;
 }
-.skin-config {
+.skin-config,
+.play-config {
+  grid-column: 1 / -1;
   width: 100%;
+}
+.play-config {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 760px;
 }
 .ranked-save-toggle {
   align-items: flex-start;
@@ -1353,6 +1361,23 @@ a.match-row:hover {
   background-position: 0 0;
   background-size: 1071px 78px;
   image-rendering: pixelated;
+}
+@keyframes skin-walk {
+  to {
+    background-position-x: -153px;
+  }
+}
+.skin-card:hover .skin-preview,
+.skin-card:focus-within .skin-preview,
+.skin-choice:focus-visible .skin-preview {
+  animation: skin-walk 520ms steps(3) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skin-card:hover .skin-preview,
+  .skin-card:focus-within .skin-preview,
+  .skin-choice:focus-visible .skin-preview {
+    animation: none;
+  }
 }
 
 @media (max-width: 1000px) {
