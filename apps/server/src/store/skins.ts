@@ -48,7 +48,7 @@ export async function purchaseSkin(
     userId,
     slug,
   ]);
-  if (owned.rowCount > 0) return 'owned';
+  if (owned.rows.length > 0) return 'owned';
   if (wallet.rows[0]!.balance < skin.price) return 'insufficient';
   await tx.query(`insert into user_skins (user_id, skin_slug, price_paid) values ($1, $2, $3)`, [
     userId,
@@ -68,7 +68,7 @@ export async function ownsSkin(db: Queryable, userId: string, slug: string): Pro
     userId,
     slug,
   ]);
-  return result.rowCount > 0;
+  return result.rows.length > 0;
 }
 
 /** Awards spendable coins once per player and ranked match. */
@@ -85,7 +85,7 @@ export async function awardPositiveElo(
      values ($1, $2, $3) on conflict (user_id, match_id) do nothing returning amount`,
     [userId, matchId, amount],
   );
-  if (inserted.rowCount === 0) return 0;
+  if (inserted.rows.length === 0) return 0;
   await tx.query(
     `insert into user_wallets (user_id, balance, earned) values ($1, $2, $2)
      on conflict (user_id) do update

@@ -246,8 +246,7 @@ export default function MatchPage({ matchId }: { matchId: string }) {
         ),
       ),
     );
-    if (renderer && snapshot) renderer.reset(snapshot);
-  }, [renderer, summary, liveInit]); // snapshot is intentionally applied only when skins change
+  }, [renderer, summary, liveInit]);
 
   const ownSlots = (summary?.participants ?? [])
     .filter((participant) => user && participant.owner?.username === user.username)

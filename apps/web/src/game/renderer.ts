@@ -208,6 +208,14 @@ class ArenaScene extends Phaser.Scene {
 
   setPlayerSkins(skins: ReadonlyMap<number, SkinSlug>): void {
     this.playerSkins = new Map(skins);
+    for (const [slot, entry] of this.players) {
+      const color = colorOf(slot);
+      const skin = this.playerSkins.get(slot);
+      const appearance = skin ? `${skin}-${color}` : color;
+      if (entry.appearance === appearance) continue;
+      entry.appearance = appearance;
+      entry.sprite.setTexture(`${appearance}-bm`, entry.sprite.frame.name);
+    }
   }
 
   clearAll(): void {

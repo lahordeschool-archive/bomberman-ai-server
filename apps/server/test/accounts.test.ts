@@ -289,6 +289,7 @@ describe('bots and versions', () => {
       ranked: true,
     });
     expect((await owner.request('GET', '/api/bots')).body.bots[0].queued).toBe(true);
+    await owner.request('DELETE', `/api/bots/${bot.body.id}/ranked`);
   });
 
   it('lists a public profile', async () => {
@@ -334,7 +335,7 @@ describe('bots and versions', () => {
     const equipped = await player.request('PUT', `/api/bots/${bot.body.id}/skin`, {
       skin: 'ember',
     });
-    expect(equipped.body.skin).toBe('ember');
+    expect(equipped).toMatchObject({ status: 200, body: { skin: 'ember' } });
 
     const stranger = new TestClient(app);
     await stranger.register('skin_stranger');
