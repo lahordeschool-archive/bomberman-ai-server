@@ -21,15 +21,19 @@ SKINS = {
 }
 
 PLAYER_TINTS = {
-    "white": (1.0, 1.0, 1.0),
-    "red": (1.25, 0.58, 0.52),
-    "blue": (0.55, 0.72, 1.3),
-    "black": (0.42, 0.42, 0.48),
+    "white": ((245, 245, 245), 0.08),
+    "red": ((255, 42, 32), 0.24),
+    "blue": ((38, 92, 255), 0.24),
+    "black": ((30, 30, 38), 0.32),
 }
 
 
-def tint(color, factors, shade=1.0):
-    return tuple(min(255, round(channel * factor * shade)) for channel, factor in zip(color, factors))
+def tint(color, player_tint, shade=1.0):
+    target, strength = player_tint
+    return tuple(
+        min(255, round((channel * (1 - strength) + target_channel * strength) * shade))
+        for channel, target_channel in zip(color, target)
+    )
 
 
 def decorate(draw, frame, kind, accent):
@@ -71,7 +75,7 @@ def generate():
     OUTPUT.mkdir(parents=True, exist_ok=True)
     source = Image.open(SOURCE).convert("RGBA")
     for slug, (base, accent, decoration) in SKINS.items():
-        for player_color, factors in PLAYER_TINTS.items():
+        for player_color, player_tint in PLAYER_TINTS.items():
             image = source.copy()
             pixels = image.load()
             for y in range(image.height):
@@ -82,12 +86,13 @@ def generate():
                     # The reference's neutral suit is grayscale; preserve face, eyes, and outline.
                     if red == green == blue and red >= 48:
                         shade = 0.42 + 0.58 * (red / 255)
-                        pixels[x, y] = (*tint(base, factors, shade), alpha)
+                        pixels[x, y] = (*tint(base, player_tint, shade), alpha)
                     elif red > 130 and blue > 90 and green < 80:
-                        pixels[x, y] = (*tint(accent, factors), alpha)
+                        pixels[x, y] = (*tint(accent, player_tint), alpha)
             draw = ImageDraw.Draw(image)
-            for frame in range(image.width // 17):
-                decorate(draw, frame, decoration, tint(accent, factors))
+            # Walking frames only. Death/victory poses keep their original silhouette.
+            for frame in range(12):
+                decorate(draw, frame, decoration, tint(accent, player_tint))
             image.save(OUTPUT / f"{slug}_{player_color}.png", optimize=True)
 
 
