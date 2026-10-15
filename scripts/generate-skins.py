@@ -198,11 +198,16 @@ def draw_effect(draw, box, kind, base, accent, phase, orientation):
             )
         draw.line([(left + 2, top + 10), (left + 14, top + 10)], fill=white, width=1)
     elif kind == "hood":  # Shadow: rolling black smoke.
-        smoke = (24, 20, 32, 220)
+        smoke = (18, 18, 24, 255)
+        smoke_edge = (82, 76, 92, 255)
         for cx, cy, radius in ((4, 9, 4), (8, 6 + pulse, 5), (12, 10, 4)):
-            draw.ellipse((left + cx - radius, top + cy - radius, left + cx + radius, top + cy + radius), fill=smoke)
-        draw.ellipse((left + 6, top + 6, left + 8, top + 8), fill=accent)
-        draw.ellipse((left + 10, top + 7, left + 12, top + 9), fill=accent)
+            draw.ellipse(
+                (left + cx - radius, top + cy - radius, left + cx + radius, top + cy + radius),
+                fill=smoke,
+                outline=smoke_edge,
+            )
+        draw.ellipse((left + 6, top + 6, left + 7, top + 7), fill=accent)
+        draw.ellipse((left + 10, top + 7, left + 11, top + 8), fill=accent)
     elif kind == "stars":  # Galaxy: a small star field.
         draw.ellipse((left + 2, top + 2, left + 14, top + 14), fill=base)
         stars = ((4 + phase, 5), (11, 3 + phase), (8, 12 - phase), (13 - phase, 9))
