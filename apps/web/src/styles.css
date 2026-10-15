@@ -1917,6 +1917,12 @@ button.match-row[aria-pressed='true'] {
   }
 }
 
+@media (max-width: 600px) {
+  .tv-info .scoreboard-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Tournaments, achievements, and operations */
 .card-grid,
 .stat-grid {
