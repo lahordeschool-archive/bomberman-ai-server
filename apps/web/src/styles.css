@@ -207,7 +207,10 @@ small {
   font-size: 14px;
   line-height: 20px;
 }
-.footer span {
+.footer-copy {
+  max-width: 640px;
+}
+.footer-links {
   display: flex;
   gap: var(--space-4);
 }
@@ -266,6 +269,10 @@ small {
   }
   .card {
     min-width: 0;
+    padding: var(--space-4);
+  }
+  .footer {
+    flex-direction: column;
     padding: var(--space-4);
   }
 }
