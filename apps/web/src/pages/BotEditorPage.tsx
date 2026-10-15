@@ -362,7 +362,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
   );
   const playerSkins = JSON.stringify(
     (casual.match?.init.participants ?? participants).flatMap((participant, slot) =>
-      participant.skin ? [[('slot' in participant ? participant.slot : slot), participant.skin]] : [],
+      participant.skin ? [['slot' in participant ? participant.slot : slot, participant.skin]] : [],
     ),
   );
   useEffect(() => {
@@ -832,10 +832,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
                 const canBuy = !owned && store.balance >= skin.price;
                 const busy = buyingSkin === slug;
                 return (
-                  <article
-                    className={`skin-card ${equipped ? 'is-selected' : ''}`}
-                    key={slug}
-                  >
+                  <article className={`skin-card ${equipped ? 'is-selected' : ''}`} key={slug}>
                     <div
                       className="skin-preview"
                       role="img"

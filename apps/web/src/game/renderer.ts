@@ -247,11 +247,7 @@ class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private drawMarker(
-    marker: Phaser.GameObjects.Graphics,
-    color: string,
-    isOwn: boolean,
-  ): void {
+  private drawMarker(marker: Phaser.GameObjects.Graphics, color: string, isOwn: boolean): void {
     const fill = Number.parseInt(color.slice(1), 16);
     marker.clear();
     if (isOwn) {

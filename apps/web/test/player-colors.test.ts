@@ -41,12 +41,7 @@ describe('player indicator colors', () => {
   });
 
   it('preserves the historical palette for players without skins', () => {
-    const colors = assignPlayerColors([
-      { slot: 0 },
-      { slot: 1 },
-      { slot: 2 },
-      { slot: 3 },
-    ]);
+    const colors = assignPlayerColors([{ slot: 0 }, { slot: 1 }, { slot: 2 }, { slot: 3 }]);
 
     expect([...colors.entries()].sort()).toEqual([
       [0, '#E8E8E8'],

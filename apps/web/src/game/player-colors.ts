@@ -1,16 +1,8 @@
+import type { PlayerColor } from '@bomberman/game-engine';
 import { getSkin, type SkinSlug } from '@bomberman/protocol';
 
 type ColorFamily =
-  | 'white'
-  | 'black'
-  | 'blue'
-  | 'red'
-  | 'orange'
-  | 'green'
-  | 'cyan'
-  | 'pink'
-  | 'purple'
-  | 'yellow';
+  'white' | 'black' | 'blue' | 'red' | 'orange' | 'green' | 'cyan' | 'pink' | 'purple' | 'yellow';
 
 interface ColorChoice {
   family: ColorFamily;
@@ -38,12 +30,19 @@ const SKIN_COLORS: Record<SkinSlug, ColorChoice> = {
 
 const CLASSIC_COLOR: ColorChoice = { family: 'white', swatch: '#E8E8E8' };
 
+export const SLOT_COLOR_SWATCHES: Record<PlayerColor, string> = {
+  white: CLASSIC_COLOR.swatch,
+  black: '#5B5B5B',
+  blue: '#4D8DF7',
+  red: '#F25555',
+};
+
 /** High-contrast alternatives, ordered to preserve the historical arena palette first. */
 const FALLBACK_COLORS: readonly ColorChoice[] = [
   CLASSIC_COLOR,
-  { family: 'black', swatch: '#5B5B5B' },
-  { family: 'blue', swatch: '#4D8DF7' },
-  { family: 'red', swatch: '#F25555' },
+  { family: 'black', swatch: SLOT_COLOR_SWATCHES.black },
+  { family: 'blue', swatch: SLOT_COLOR_SWATCHES.blue },
+  { family: 'red', swatch: SLOT_COLOR_SWATCHES.red },
   { family: 'green', swatch: '#56C271' },
   { family: 'orange', swatch: '#FF8A3D' },
   { family: 'purple', swatch: '#A875F5' },

@@ -60,11 +60,7 @@ export function Scoreboard({
           const placement = snapshot?.result?.players[entry.slot]?.placement;
           return (
             <li key={entry.slot} className={player && !player.alive ? 'is-dead' : undefined}>
-              <span
-                className="swatch"
-                style={{ background: colors.get(entry.slot) }}
-                aria-hidden
-              />
+              <span className="swatch" style={{ background: colors.get(entry.slot) }} aria-hidden />
               <span className="scoreboard-name">
                 <strong>{entry.name}</strong>
                 {entry.detail ? <small>{entry.detail}</small> : null}

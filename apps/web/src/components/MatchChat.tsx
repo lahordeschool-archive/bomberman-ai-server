@@ -10,7 +10,7 @@ import {
   Robot,
 } from '@phosphor-icons/react';
 import { type FormEvent, Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { SWATCHES } from '../game/Scoreboard.tsx';
+import { SLOT_COLOR_SWATCHES } from '../game/player-colors.ts';
 import { emitWithAck } from '../lib/socket.ts';
 import { type ChatLine, toBlocks } from './chat-lines.ts';
 
@@ -19,7 +19,7 @@ const NAME_COLORS = ['#ff8a3d', '#6fd38f', '#56ccf2', '#f2c94c', '#e88ad8', '#ff
 
 function nameColor(from: ChatAuthor): string {
   if (from.kind === 'bot') {
-    return SWATCHES[PLAYER_COLORS[from.slot % PLAYER_COLORS.length]!];
+    return SLOT_COLOR_SWATCHES[PLAYER_COLORS[from.slot % PLAYER_COLORS.length]!];
   }
   let hash = 0;
   for (const char of from.username) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
