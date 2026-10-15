@@ -52,8 +52,11 @@ class ArenaScene extends Phaser.Scene {
   private arenaHeight = HEIGHT;
   private walls = new Map<number, Phaser.GameObjects.Sprite>();
   private items = new Map<string, Phaser.GameObjects.Sprite>();
-  private bombs = new Map<number, Phaser.GameObjects.Sprite>();
-  private flames = new Map<string, { sprite: Phaser.GameObjects.Sprite; kind: FlameKind }>();
+  private bombs = new Map<number, { sprite: Phaser.GameObjects.Sprite; ownerId: number }>();
+  private flames = new Map<
+    string,
+    { sprite: Phaser.GameObjects.Sprite; kind: FlameKind; ownerId: number; appearance: string }
+  >();
   private players = new Map<number, PlayerSprite>();
   private markers = new Map<number, Phaser.GameObjects.Graphics>();
   private highlighted: readonly number[] = [];
@@ -89,6 +92,16 @@ class ArenaScene extends Phaser.Scene {
           `${ASSETS}/skins/${skin.slug}_${color}.png`,
           { frameWidth: 17, frameHeight: 26 },
         );
+        this.load.spritesheet(
+          `${skin.slug}-${color}-bomb`,
+          `${ASSETS}/skins/${skin.slug}_${color}_bomb.png`,
+          { frameWidth: 16, frameHeight: 16 },
+        );
+        this.load.spritesheet(
+          `${skin.slug}-${color}-flame`,
+          `${ASSETS}/skins/${skin.slug}_${color}_flame.png`,
+          { frameWidth: 16, frameHeight: 16 },
+        );
       }
     }
     this.load.spritesheet('tiles', `${ASSETS}/tiles/snes_stage_1.png`, {
@@ -107,6 +120,7 @@ class ArenaScene extends Phaser.Scene {
       this.createPlayerAnimations(`${color}-bm`, color);
       for (const skin of SKINS) {
         this.createPlayerAnimations(`${skin.slug}-${color}-bm`, `${skin.slug}-${color}`);
+        this.createEffectAnimations(`${skin.slug}-${color}`);
       }
       this.createWorldAnimations(color);
     }
@@ -141,22 +155,28 @@ class ArenaScene extends Phaser.Scene {
   }
 
   private createWorldAnimations(color: string): void {
-    this.anims.create({
-      key: `${color}-bomb-ticking`,
-      frames: this.anims.generateFrameNumbers(`${color}-bomb`, { start: 0, end: 3 }),
-      frameRate: 3,
-      repeat: -1,
-    });
+    this.createEffectAnimations(color);
     this.anims.create({
       key: `${color}-wall-destroyed`,
       frames: this.anims.generateFrameNumbers(`${color}-wall`, { start: 0, end: 5 }),
       frameRate: 12,
       repeat: 0,
     });
+  }
+
+  private createEffectAnimations(appearance: string): void {
+    this.anims.create({
+      key: `${appearance}-bomb-ticking`,
+      frames: this.anims.generateFrameNumbers(`${appearance}-bomb`, { start: 0, end: 3 }),
+      frameRate: 3,
+      repeat: -1,
+    });
     for (const animation of Object.values(FLAME_ANIMATIONS)) {
       this.anims.create({
-        key: `${color}-flame-${animation.name}`,
-        frames: this.anims.generateFrameNumbers(`${color}-flame`, { frames: animation.frames }),
+        key: `${appearance}-flame-${animation.name}`,
+        frames: this.anims.generateFrameNumbers(`${appearance}-flame`, {
+          frames: animation.frames,
+        }),
         frameRate: 18,
         repeat: -1,
       });
@@ -216,12 +236,30 @@ class ArenaScene extends Phaser.Scene {
       entry.appearance = appearance;
       entry.sprite.setTexture(`${appearance}-bm`, entry.sprite.frame.name);
     }
+    for (const entry of this.bombs.values()) {
+      const appearance = this.appearanceOf(entry.ownerId);
+      entry.sprite.setTexture(`${appearance}-bomb`, entry.sprite.frame.name);
+      entry.sprite.play(`${appearance}-bomb-ticking`);
+    }
+    for (const entry of this.flames.values()) {
+      const appearance = this.appearanceOf(entry.ownerId);
+      if (appearance === entry.appearance) continue;
+      entry.appearance = appearance;
+      entry.sprite.setTexture(`${appearance}-flame`);
+      entry.sprite.play(`${appearance}-flame-${FLAME_ANIMATIONS[entry.kind].name}`);
+    }
+  }
+
+  private appearanceOf(playerId: number): string {
+    const color = colorOf(playerId);
+    const skin = this.playerSkins.get(playerId);
+    return skin ? `${skin}-${color}` : color;
   }
 
   clearAll(): void {
     for (const sprite of this.walls.values()) sprite.destroy();
     for (const sprite of this.items.values()) sprite.destroy();
-    for (const sprite of this.bombs.values()) sprite.destroy();
+    for (const { sprite } of this.bombs.values()) sprite.destroy();
     for (const { sprite } of this.flames.values()) sprite.destroy();
     for (const { sprite } of this.players.values()) sprite.destroy();
     this.walls.clear();
@@ -244,7 +282,7 @@ class ArenaScene extends Phaser.Scene {
       entry.sprite.anims.stop();
       entry.sprite.setFrame(IDLE_FRAMES[entry.facing]);
     }
-    for (const sprite of this.bombs.values()) sprite.anims.pause();
+    for (const { sprite } of this.bombs.values()) sprite.anims.pause();
     for (const { sprite } of this.flames.values()) sprite.anims.pause();
   }
 
@@ -256,7 +294,7 @@ class ArenaScene extends Phaser.Scene {
     this.syncArena(snapshot);
     if (this.halted) {
       this.halted = false;
-      for (const sprite of this.bombs.values()) sprite.anims.resume();
+      for (const { sprite } of this.bombs.values()) sprite.anims.resume();
       for (const { sprite } of this.flames.values()) sprite.anims.resume();
     }
     const wallOwners = new Map<number, number>();
@@ -426,16 +464,17 @@ class ArenaScene extends Phaser.Scene {
     for (const bomb of snapshot.bombs) {
       seen.add(bomb.id);
       if (this.bombs.has(bomb.id)) continue;
+      const appearance = this.appearanceOf(bomb.ownerId);
       const sprite = this.add
-        .sprite(bomb.x * TILE_SIZE, bomb.y * TILE_SIZE, `${colorOf(bomb.ownerId)}-bomb`, 0)
+        .sprite(bomb.x * TILE_SIZE, bomb.y * TILE_SIZE, `${appearance}-bomb`, 0)
         .setOrigin(0, 0)
         .setDepth(2);
-      sprite.play(`${colorOf(bomb.ownerId)}-bomb-ticking`);
-      this.bombs.set(bomb.id, sprite);
+      sprite.play(`${appearance}-bomb-ticking`);
+      this.bombs.set(bomb.id, { sprite, ownerId: bomb.ownerId });
     }
-    for (const [id, sprite] of this.bombs) {
+    for (const [id, entry] of this.bombs) {
       if (!seen.has(id)) {
-        sprite.destroy();
+        entry.sprite.destroy();
         this.bombs.delete(id);
       }
     }
@@ -447,20 +486,29 @@ class ArenaScene extends Phaser.Scene {
       const key = cellKey(flame.x, flame.y);
       seen.add(key);
       const existing = this.flames.get(key);
-      const animation = `${colorOf(flame.ownerId)}-flame-${FLAME_ANIMATIONS[flame.kind].name}`;
+      const appearance = this.appearanceOf(flame.ownerId);
+      const animation = `${appearance}-flame-${FLAME_ANIMATIONS[flame.kind].name}`;
       if (existing) {
-        if (existing.kind !== flame.kind) {
+        if (existing.kind !== flame.kind || existing.appearance !== appearance) {
           existing.kind = flame.kind;
+          existing.ownerId = flame.ownerId;
+          existing.appearance = appearance;
+          existing.sprite.setTexture(`${appearance}-flame`);
           existing.sprite.play(animation);
         }
         continue;
       }
       const sprite = this.add
-        .sprite(flame.x * TILE_SIZE, flame.y * TILE_SIZE, `${colorOf(flame.ownerId)}-flame`, 5)
+        .sprite(flame.x * TILE_SIZE, flame.y * TILE_SIZE, `${appearance}-flame`, 5)
         .setOrigin(0, 0)
         .setDepth(3);
       sprite.play(animation);
-      this.flames.set(key, { sprite, kind: flame.kind });
+      this.flames.set(key, {
+        sprite,
+        kind: flame.kind,
+        ownerId: flame.ownerId,
+        appearance,
+      });
     }
     for (const [key, entry] of this.flames) {
       if (!seen.has(key)) {
@@ -471,9 +519,7 @@ class ArenaScene extends Phaser.Scene {
   }
 
   private syncPlayer(player: SnapshotPlayer, instant: boolean): void {
-    const color = colorOf(player.id);
-    const skin = this.playerSkins.get(player.id);
-    const appearance = skin ? `${skin}-${color}` : color;
+    const appearance = this.appearanceOf(player.id);
     const targetX = player.px * TILE_SIZE + TILE_SIZE / 2;
     const targetY = player.py * TILE_SIZE + TILE_SIZE / 2;
     let entry = this.players.get(player.id);

@@ -1,10 +1,11 @@
-"""Generate the ten custom 17x26 Bomberman sprite sheets from the SNES reference."""
+"""Generate custom player, bomb, and explosion sheets from the SNES references."""
 
 from pathlib import Path
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "apps/web/public/game/sprites/snes_white.png"
+EFFECT_SOURCE = ROOT / "apps/web/public/game/sprites"
 OUTPUT = ROOT / "apps/web/public/game/skins"
 
 SKINS = {
@@ -71,6 +72,177 @@ def decorate(draw, frame, kind, accent):
         draw.line([(x + 4, 7), (x + 13, 7)], fill=dark, width=1)
 
 
+def decorate_bomb(draw, frame, kind, base, accent):
+    x = frame * 16
+    if kind == "horns":
+        draw.polygon([(x + 4, 7), (x + 6, 3), (x + 8, 7)], fill=accent)
+        draw.polygon([(x + 9, 7), (x + 11, 3), (x + 13, 7)], fill=accent)
+    elif kind == "leaf":
+        draw.polygon([(x + 7, 5), (x + 12, 3), (x + 10, 8)], fill=accent)
+    elif kind == "fin":
+        draw.arc((x + 4, 6, x + 13, 13), 190, 350, fill=accent, width=2)
+    elif kind == "band":
+        draw.line([(x + 3, 9), (x + 13, 9)], fill=accent, width=2)
+    elif kind == "jewel":
+        draw.polygon([(x + 8, 5), (x + 11, 9), (x + 8, 12), (x + 5, 9)], fill=accent)
+    elif kind == "visor":
+        draw.rounded_rectangle((x + 4, 7, x + 12, 10), radius=1, fill=accent)
+    elif kind == "crystal":
+        draw.polygon([(x + 8, 4), (x + 11, 9), (x + 8, 13), (x + 5, 9)], fill=accent)
+    elif kind == "hood":
+        draw.ellipse((x + 4, 6, x + 12, 12), outline=accent, width=2)
+    elif kind == "stars":
+        draw.point((x + 6, 7), fill=accent)
+        draw.point((x + 10, 10), fill=(255, 255, 255))
+        draw.point((x + 11, 6), fill=base)
+    elif kind == "crown":
+        silver = (220, 228, 236)
+        draw.ellipse((x + 6, 7, x + 10, 11), fill=silver, outline=base)
+        draw.line([(x + 8, 8), (x + 8, 10)], fill=base)
+
+
+def generate_bomb(slug, base, accent, decoration, player_color, player_tint):
+    source = Image.open(EFFECT_SOURCE / f"snes_bombs_{player_color}.png").convert("RGBA")
+    image = source.copy()
+    pixels = image.load()
+    for y in range(image.height):
+        for x in range(image.width):
+            red, green, blue, alpha = pixels[x, y]
+            if alpha and max(red, green, blue) > 80:
+                shade = 0.35 + 0.65 * (max(red, green, blue) / 255)
+                themed = tint(base, player_tint, shade)
+                body = tuple(
+                    round(original * 0.65 + themed_channel * 0.35)
+                    for original, themed_channel in zip((red, green, blue), themed)
+                )
+                pixels[x, y] = (*body, alpha)
+    draw = ImageDraw.Draw(image)
+    for frame in range(image.width // 16):
+        decorate_bomb(
+            draw,
+            frame,
+            decoration,
+            tint(base, player_tint),
+            tint(accent, player_tint),
+        )
+    image.save(OUTPUT / f"{slug}_{player_color}_bomb.png", optimize=True)
+
+
+def effect_orientation(row):
+    if row in (2, 4, 5):
+        return "vertical"
+    if row in (3, 6, 7):
+        return "horizontal"
+    return "center"
+
+
+def draw_effect(draw, box, kind, base, accent, phase, orientation):
+    left, top = box
+    pulse = (0, 1, 2, 1, 0)[phase]
+    white = (245, 250, 255, 255)
+    base = (*base, 255)
+    accent = (*accent, 255)
+    if kind == "horns":  # Ember: hotter, sharper fire.
+        draw.polygon(
+            [(left + 2, top + 15), (left + 4, top + 5 - pulse), (left + 7, top + 10),
+             (left + 9, top + 2 + pulse), (left + 14, top + 15)],
+            fill=base,
+        )
+        draw.polygon(
+            [(left + 5, top + 15), (left + 8, top + 7), (left + 11, top + 15)],
+            fill=accent,
+        )
+    elif kind == "leaf":  # Moss: a rapidly growing thorny vine.
+        if orientation == "vertical":
+            draw.line([(left + 8, top), (left + 8, top + 15)], fill=base, width=3)
+        elif orientation == "horizontal":
+            draw.line([(left, top + 8), (left + 15, top + 8)], fill=base, width=3)
+        else:
+            draw.line([(left + 2, top + 13), (left + 13, top + 2)], fill=base, width=3)
+        draw.polygon([(left + 4, top + 8), (left + 1, top + 4), (left + 7, top + 5)], fill=accent)
+        draw.polygon([(left + 10, top + 9), (left + 15, top + 11), (left + 11, top + 5)], fill=accent)
+    elif kind == "fin":  # Tide: cresting water and bubbles.
+        draw.rectangle((left, top + 8 - pulse, left + 15, top + 15), fill=base)
+        draw.arc((left - 2, top + 2 - pulse, left + 9, top + 13), 200, 355, fill=accent, width=3)
+        draw.arc((left + 6, top + 1, left + 17, top + 12 + pulse), 200, 355, fill=white, width=2)
+        draw.ellipse((left + 3 + phase, top + 2, left + 5 + phase, top + 4), fill=white)
+    elif kind == "band":  # Sunset: a band of solar light.
+        draw.ellipse((left + 3 - pulse, top + 3 - pulse, left + 12 + pulse, top + 12 + pulse), fill=accent)
+        if orientation == "vertical":
+            draw.rectangle((left + 6, top, left + 9, top + 15), fill=base)
+        else:
+            draw.rectangle((left, top + 6, left + 15, top + 9), fill=base)
+    elif kind == "jewel":  # Royal: gem shards.
+        draw.polygon([(left + 8, top + 1), (left + 14, top + 8), (left + 8, top + 15), (left + 2, top + 8)], fill=base)
+        draw.polygon([(left + 8, top + 3 + pulse), (left + 11, top + 8), (left + 8, top + 12), (left + 5, top + 8)], fill=accent)
+        draw.point((left + 4, top + 3), fill=white)
+    elif kind == "visor":  # Neon: a hard laser with a bright core.
+        if orientation == "vertical":
+            draw.rectangle((left + 4 - pulse, top, left + 11 + pulse, top + 15), fill=base)
+            draw.rectangle((left + 7, top, left + 8, top + 15), fill=white)
+        elif orientation == "horizontal":
+            draw.rectangle((left, top + 4 - pulse, left + 15, top + 11 + pulse), fill=base)
+            draw.rectangle((left, top + 7, left + 15, top + 8), fill=white)
+        else:
+            draw.rectangle((left + 5 - pulse, top, left + 10 + pulse, top + 15), fill=base)
+            draw.rectangle((left, top + 5 - pulse, left + 15, top + 10 + pulse), fill=accent)
+            draw.rectangle((left + 7, top, left + 8, top + 15), fill=white)
+            draw.rectangle((left, top + 7, left + 15, top + 8), fill=white)
+    elif kind == "crystal":  # Frost: a moving wall of ice.
+        draw.rectangle((left, top + 4 - pulse, left + 15, top + 15), fill=base)
+        for offset in (1, 6, 11):
+            draw.polygon(
+                [(left + offset, top + 7), (left + offset + 3, top + 1 + pulse),
+                 (left + offset + 5, top + 7)],
+                fill=accent,
+            )
+        draw.line([(left + 2, top + 10), (left + 14, top + 10)], fill=white, width=1)
+    elif kind == "hood":  # Shadow: rolling black smoke.
+        smoke = (24, 20, 32, 220)
+        for cx, cy, radius in ((4, 9, 4), (8, 6 + pulse, 5), (12, 10, 4)):
+            draw.ellipse((left + cx - radius, top + cy - radius, left + cx + radius, top + cy + radius), fill=smoke)
+        draw.ellipse((left + 6, top + 6, left + 8, top + 8), fill=accent)
+        draw.ellipse((left + 10, top + 7, left + 12, top + 9), fill=accent)
+    elif kind == "stars":  # Galaxy: a small star field.
+        draw.ellipse((left + 2, top + 2, left + 14, top + 14), fill=base)
+        stars = ((4 + phase, 5), (11, 3 + phase), (8, 12 - phase), (13 - phase, 9))
+        for index, (x, y) in enumerate(stars):
+            color = white if index % 2 else accent
+            draw.point((left + x, top + y), fill=color)
+            if index == phase % len(stars):
+                draw.line([(left + x - 1, top + y), (left + x + 1, top + y)], fill=color)
+                draw.line([(left + x, top + y - 1), (left + x, top + y + 1)], fill=color)
+    elif kind == "crown":  # Crown: spinning silver coins.
+        silver = (210, 222, 232, 255)
+        dark = (72, 88, 104, 255)
+        for offset in (1, 7):
+            width = max(2, 6 - abs(2 - phase) * 2)
+            cx = left + offset + 3
+            draw.ellipse((cx - width // 2, top + offset, cx + width // 2, top + offset + 6), fill=silver, outline=dark)
+            draw.line([(cx, top + offset + 1), (cx, top + offset + 5)], fill=white)
+
+
+def generate_flame(slug, base, accent, decoration, player_color, player_tint):
+    image = Image.new("RGBA", (80, 128))
+    draw = ImageDraw.Draw(image)
+    themed_base = tint(base, player_tint)
+    themed_accent = tint(accent, player_tint)
+    for frame in range(40):
+        row, phase = divmod(frame, 5)
+        if row == 0:  # Unused legacy frames.
+            continue
+        draw_effect(
+            draw,
+            (phase * 16, row * 16),
+            decoration,
+            themed_base,
+            themed_accent,
+            phase,
+            effect_orientation(row),
+        )
+    image.save(OUTPUT / f"{slug}_{player_color}_flame.png", optimize=True)
+
+
 def generate():
     OUTPUT.mkdir(parents=True, exist_ok=True)
     source = Image.open(SOURCE).convert("RGBA")
@@ -94,6 +266,8 @@ def generate():
             for frame in range(12):
                 decorate(draw, frame, decoration, tint(accent, player_tint))
             image.save(OUTPUT / f"{slug}_{player_color}.png", optimize=True)
+            generate_bomb(slug, base, accent, decoration, player_color, player_tint)
+            generate_flame(slug, base, accent, decoration, player_color, player_tint)
 
 
 if __name__ == "__main__":
