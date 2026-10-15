@@ -1150,6 +1150,7 @@ a.match-row:hover {
   flex-direction: column;
   gap: var(--space-3);
   max-width: 760px;
+  margin-inline: auto;
 }
 .ranked-save-toggle {
   align-items: flex-start;
