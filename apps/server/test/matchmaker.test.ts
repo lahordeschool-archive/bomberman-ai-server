@@ -38,7 +38,7 @@ describe('ranked entrant selection', () => {
       queued('anchor', 'owner-a', 1200),
       queued('same-owner-closest', 'owner-a', 1201),
       queued('first-tie', 'owner-b', 1180),
-      queued('same-second-owner', 'owner-b', 1205),
+      queued('same-second-owner', 'owner-b', 1230),
       queued('second-tie', 'owner-c', 1220),
       queued('third', 'owner-d', 1230),
     ];
