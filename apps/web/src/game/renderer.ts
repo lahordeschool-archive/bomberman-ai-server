@@ -1048,7 +1048,7 @@ class IsometricArena {
     core.position.y = 0.39;
 
     if (end) {
-      const direction =
+      const direction: readonly [number, number] =
         kind === 'endLeft'
           ? [-1, 0]
           : kind === 'endRight'
