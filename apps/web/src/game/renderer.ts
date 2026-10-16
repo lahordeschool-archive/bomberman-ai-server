@@ -16,8 +16,6 @@ import { assignPlayerColors, SLOT_COLOR_SWATCHES } from './player-colors.ts';
 const VIEW_ASPECT = 16 / 10;
 const ASSETS = '/game';
 const WORLD_Y = 0.08;
-const IDLE_FRAMES = { up: 1, left: 4, down: 7, right: 10 } as const;
-const WALK_START = { up: 0, left: 3, down: 6, right: 9 } as const;
 
 const SKIN_ACCENTS: Record<SkinSlug, string> = {
   ember: '#ff7018',
@@ -67,8 +65,11 @@ const THEMES = {
 
 interface PlayerVisual {
   root: THREE.Group;
-  sprite: THREE.Sprite;
-  material: THREE.SpriteMaterial;
+  model: THREE.Group;
+  leftArm: THREE.Group;
+  rightArm: THREE.Group;
+  leftLeg: THREE.Group;
+  rightLeg: THREE.Group;
   marker: THREE.Sprite;
   target: THREE.Vector3;
   appearance: string;
@@ -117,10 +118,7 @@ function disposeObject(object: THREE.Object3D): void {
   });
 }
 
-/**
- * Lightweight isometric scene. Geometry and effects are generated in code; the only
- * image downloaded per player is that player's tiny existing skin sheet.
- */
+/** Lightweight isometric scene built from compact procedural geometry. */
 class IsometricArena {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.OrthographicCamera();
@@ -152,7 +150,6 @@ class IsometricArena {
   private highlighted: readonly number[] = [];
   private playerSkins = new Map<number, SkinSlug>();
   private closingAnnounced = false;
-  private lastTime = 0;
   private audio: HTMLAudioElement | null = null;
 
   constructor(parent: HTMLElement) {
@@ -201,7 +198,9 @@ class IsometricArena {
   }
 
   private fitCamera(): void {
-    const halfHeight = (this.width + this.height) * 0.18 + 1.8;
+    // Battle-mode framing: mostly front-facing, with enough yaw to read block depth.
+    // This keeps grid directions obvious instead of turning the board into a diamond.
+    const halfHeight = this.height * 0.34 + this.width * 0.08 + 1.7;
     const halfWidth = halfHeight * VIEW_ASPECT;
     this.camera.left = -halfWidth;
     this.camera.right = halfWidth;
@@ -209,8 +208,8 @@ class IsometricArena {
     this.camera.bottom = -halfHeight;
     this.camera.near = 0.1;
     this.camera.far = 80;
-    this.camera.position.set(12, 15, 14);
-    this.camera.lookAt(0, 0, 0);
+    this.camera.position.set(6.5, 18.5, 22);
+    this.camera.lookAt(0, 0.15, 0);
     this.camera.updateProjectionMatrix();
   }
 
@@ -224,23 +223,33 @@ class IsometricArena {
     if (!this.visible) return;
     const delta = Math.min(this.clock.getDelta(), 0.05);
     const now = performance.now();
-    this.lastTime = now;
 
     for (const player of this.players.values()) {
       const factor = Math.min(1, delta / (TICK_MS / 1000));
       player.root.position.lerp(player.target, factor);
       player.root.renderOrder = Math.round((player.root.position.z + this.height) * 10);
       if (!this.halted && player.alive) {
-        const frame = player.moving
-          ? WALK_START[player.facing] + (Math.floor(now / 125) % 3)
-          : IDLE_FRAMES[player.facing];
-        this.setAtlasFrame(player.material.map, frame, 18, 1);
-        player.sprite.position.y = 0.76 + (player.moving ? Math.sin(now / 80) * 0.025 : 0);
-        player.marker.position.y = 1.62 + Math.sin(now / 180) * 0.045;
+        const stride = player.moving ? Math.sin(now / 82) * 0.58 : 0;
+        player.leftArm.rotation.x = stride;
+        player.rightArm.rotation.x = -stride;
+        player.leftLeg.rotation.x = -stride * 0.72;
+        player.rightLeg.rotation.x = stride * 0.72;
+        player.model.position.y = player.moving ? Math.abs(Math.sin(now / 82)) * 0.045 : 0;
+        player.model.rotation.z = player.moving ? Math.sin(now / 82) * 0.025 : 0;
+        player.root.rotation.y =
+          player.facing === 'up'
+            ? Math.PI
+            : player.facing === 'left'
+              ? -Math.PI / 2
+              : player.facing === 'right'
+                ? Math.PI / 2
+                : 0;
+        player.marker.position.y = 1.72 + Math.sin(now / 180) * 0.045;
       } else if (player.deathStarted !== null) {
         const progress = Math.min(1, (now - player.deathStarted) / 700);
-        this.setAtlasFrame(player.material.map, 12 + Math.min(5, Math.floor(progress * 6)), 18, 1);
-        player.material.opacity = 1 - Math.max(0, progress - 0.72) / 0.28;
+        player.model.rotation.z = progress * Math.PI * 0.5;
+        player.model.rotation.y += delta * 8;
+        player.model.scale.setScalar(1 - progress * 0.65);
         if (progress === 1) player.root.visible = false;
       }
     }
@@ -446,32 +455,233 @@ class IsometricArena {
     return texture;
   }
 
-  private appearancePath(playerId: number): string {
-    const color = colorOf(playerId);
-    const skin = this.playerSkins.get(playerId);
-    return skin ? `${ASSETS}/skins/${skin}_${color}.png` : `${ASSETS}/sprites/snes_${color}.png`;
-  }
-
   private appearanceOf(playerId: number): string {
     return `${this.playerSkins.get(playerId) ?? 'classic'}-${colorOf(playerId)}`;
   }
 
-  private async updatePlayerTexture(playerId: number, visual: PlayerVisual): Promise<void> {
-    const appearance = this.appearanceOf(playerId);
-    visual.appearance = appearance;
-    let source: THREE.Texture;
-    try {
-      source = await this.loadTexture(this.appearancePath(playerId));
-    } catch {
-      source = await this.loadTexture(`${ASSETS}/sprites/snes_${colorOf(playerId)}.png`);
+  private toon(
+    color: THREE.ColorRepresentation,
+    options: { emissive?: THREE.ColorRepresentation } = {},
+  ): THREE.MeshToonMaterial {
+    return new THREE.MeshToonMaterial({
+      color,
+      emissive: options.emissive ?? 0x000000,
+      emissiveIntensity: options.emissive ? 0.55 : 0,
+    });
+  }
+
+  private playerPalette(playerId: number): {
+    suit: THREE.Color;
+    trim: THREE.Color;
+    accent: THREE.Color;
+    dark: THREE.Color;
+  } {
+    const skin = this.playerSkins.get(playerId);
+    const slot = new THREE.Color(SLOT_COLOR_SWATCHES[colorOf(playerId)]);
+    const accent = new THREE.Color(skin ? SKIN_ACCENTS[skin] : slot);
+    const suit = skin ? accent.clone().offsetHSL(0, -0.08, 0.18) : new THREE.Color(0xf1f2ed);
+    const trim = skin ? accent.clone().offsetHSL(0.03, 0.04, -0.18) : slot;
+    return { suit, trim, accent, dark: new THREE.Color(0x171921) };
+  }
+
+  private createLimb(
+    x: number,
+    y: number,
+    radius: number,
+    length: number,
+    material: THREE.Material,
+    endMaterial: THREE.Material,
+  ): THREE.Group {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, y, 0);
+    const limb = new THREE.Mesh(new THREE.CapsuleGeometry(radius, length, 3, 8), material);
+    limb.position.y = -(length / 2 + radius * 0.35);
+    const end = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.18, 10, 7), endMaterial);
+    end.position.y = -(length + radius * 1.15);
+    pivot.add(limb, end);
+    return pivot;
+  }
+
+  private addSkinDetails(
+    model: THREE.Group,
+    playerId: number,
+    materials: {
+      suit: THREE.MeshToonMaterial;
+      trim: THREE.MeshToonMaterial;
+      accent: THREE.MeshToonMaterial;
+      dark: THREE.MeshToonMaterial;
+      glow: THREE.MeshToonMaterial;
+    },
+  ): void {
+    const skin = this.playerSkins.get(playerId);
+    if (!skin) return;
+    const addCone = (
+      x: number,
+      y: number,
+      z: number,
+      scale: [number, number, number] = [1, 1, 1],
+    ) => {
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.24, 7), materials.accent);
+      cone.position.set(x, y, z);
+      cone.scale.set(...scale);
+      model.add(cone);
+      return cone;
+    };
+
+    if (skin === 'ember') {
+      const left = addCone(-0.2, 1.21, 0, [0.8, 1, 0.8]);
+      const right = addCone(0.2, 1.21, 0, [0.8, 1, 0.8]);
+      left.rotation.z = -0.38;
+      right.rotation.z = 0.38;
+    } else if (skin === 'moss') {
+      for (const [x, rotation] of [
+        [-0.18, -0.65],
+        [0, 0],
+        [0.18, 0.65],
+      ] as const) {
+        const leaf = addCone(x, 1.26, -0.02, [0.75, 1.05, 0.4]);
+        leaf.rotation.z = rotation;
+      }
+    } else if (skin === 'tide') {
+      for (const side of [-1, 1]) {
+        const fin = addCone(side * 0.34, 0.95, -0.02, [0.6, 1.35, 0.25]);
+        fin.rotation.z = (-side * Math.PI) / 2;
+      }
+    } else if (skin === 'sunset') {
+      for (const side of [-1, 1]) {
+        const disc = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.095, 0.095, 0.06, 12),
+          materials.accent,
+        );
+        disc.position.set(side * 0.31, 0.96, 0);
+        disc.rotation.z = Math.PI / 2;
+        model.add(disc);
+      }
+    } else if (skin === 'royal') {
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.305, 0.035, 7, 20), materials.accent);
+      band.position.y = 1.08;
+      band.rotation.x = Math.PI / 2;
+      model.add(band);
+    } else if (skin === 'neon') {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.29, 0.035, 7, 20), materials.glow);
+      ring.position.set(0, 0.58, 0);
+      ring.rotation.x = Math.PI / 2;
+      model.add(ring);
+    } else if (skin === 'frost') {
+      for (const x of [-0.2, 0, 0.2]) {
+        addCone(x, x === 0 ? 1.34 : 1.27, -0.03, [0.75, x === 0 ? 1.35 : 1, 0.75]);
+      }
+    } else if (skin === 'shadow') {
+      const hood = new THREE.Mesh(
+        new THREE.TorusGeometry(0.305, 0.065, 8, 24, Math.PI * 1.35),
+        materials.dark,
+      );
+      hood.position.set(0, 0.98, 0.11);
+      hood.rotation.z = -Math.PI * 0.18;
+      model.add(hood);
+    } else if (skin === 'galaxy') {
+      const orbit = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.022, 6, 28), materials.glow);
+      orbit.position.y = 0.95;
+      orbit.rotation.set(Math.PI / 2.7, 0.35, 0.2);
+      const moon = new THREE.Mesh(new THREE.SphereGeometry(0.06, 9, 7), materials.accent);
+      moon.position.set(0.36, 1.05, 0.05);
+      model.add(orbit, moon);
+    } else if (skin === 'crown') {
+      const band = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.23, 0.26, 0.12, 10),
+        materials.accent,
+      );
+      band.position.y = 1.29;
+      model.add(band);
+      for (let index = 0; index < 5; index++) {
+        const angle = (index / 5) * Math.PI * 2;
+        const point = addCone(
+          Math.sin(angle) * 0.2,
+          1.43,
+          Math.cos(angle) * 0.2,
+          [0.62, 0.9, 0.62],
+        );
+        point.rotation.z = -Math.sin(angle) * 0.12;
+      }
     }
-    if (visual.appearance !== appearance || !this.players.has(playerId)) return;
-    const texture = source.clone();
-    texture.needsUpdate = true;
-    visual.material.map?.dispose();
-    visual.material.map = texture;
-    visual.material.needsUpdate = true;
-    this.setAtlasFrame(texture, IDLE_FRAMES[visual.facing], 18, 1);
+  }
+
+  private createBomberModel(playerId: number): {
+    model: THREE.Group;
+    leftArm: THREE.Group;
+    rightArm: THREE.Group;
+    leftLeg: THREE.Group;
+    rightLeg: THREE.Group;
+  } {
+    const palette = this.playerPalette(playerId);
+    const materials = {
+      suit: this.toon(palette.suit),
+      trim: this.toon(palette.trim),
+      accent: this.toon(palette.accent),
+      dark: this.toon(palette.dark),
+      glow: this.toon(palette.accent, { emissive: palette.accent }),
+    };
+    const model = new THREE.Group();
+
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.27, 14, 10), materials.trim);
+    body.position.y = 0.57;
+    body.scale.y = 0.9;
+    const belt = new THREE.Mesh(new THREE.TorusGeometry(0.245, 0.035, 7, 16), materials.dark);
+    belt.position.y = 0.51;
+    belt.rotation.x = Math.PI / 2;
+
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 12), materials.suit);
+    head.position.y = 0.96;
+    head.scale.set(1.04, 1, 0.98);
+    const face = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.18, 0.055), materials.dark);
+    face.position.set(0, 0.96, 0.293);
+    const eyeMaterial = this.toon(0xfafcff);
+    const eyeLeft = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), eyeMaterial);
+    const eyeRight = eyeLeft.clone();
+    eyeLeft.position.set(-0.082, 0.995, 0.33);
+    eyeRight.position.set(0.082, 0.995, 0.33);
+
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.21, 7), materials.dark);
+    stem.position.y = 1.29;
+    const antenna = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 7), materials.accent);
+    antenna.position.y = 1.42;
+
+    const leftArm = this.createLimb(-0.3, 0.7, 0.085, 0.22, materials.suit, materials.accent);
+    const rightArm = this.createLimb(0.3, 0.7, 0.085, 0.22, materials.suit, materials.accent);
+    const leftLeg = this.createLimb(-0.135, 0.38, 0.09, 0.18, materials.trim, materials.dark);
+    const rightLeg = this.createLimb(0.135, 0.38, 0.09, 0.18, materials.trim, materials.dark);
+    leftLeg.children[1]!.position.z = 0.06;
+    rightLeg.children[1]!.position.z = 0.06;
+
+    model.add(
+      body,
+      belt,
+      head,
+      face,
+      eyeLeft,
+      eyeRight,
+      stem,
+      antenna,
+      leftArm,
+      rightArm,
+      leftLeg,
+      rightLeg,
+    );
+    this.addSkinDetails(model, playerId, materials);
+    return { model, leftArm, rightArm, leftLeg, rightLeg };
+  }
+
+  private rebuildPlayerModel(playerId: number, visual: PlayerVisual): void {
+    visual.model.removeFromParent();
+    disposeObject(visual.model);
+    const parts = this.createBomberModel(playerId);
+    visual.model = parts.model;
+    visual.leftArm = parts.leftArm;
+    visual.rightArm = parts.rightArm;
+    visual.leftLeg = parts.leftLeg;
+    visual.rightLeg = parts.rightLeg;
+    visual.appearance = this.appearanceOf(playerId);
+    visual.root.add(visual.model);
   }
 
   private setAtlasFrame(
@@ -531,7 +741,7 @@ class IsometricArena {
       player.marker.removeFromParent();
       disposeObject(player.marker);
       player.marker = this.makeMarker(id, this.highlighted.includes(id));
-      player.marker.position.y = 1.62;
+      player.marker.position.y = 1.72;
       player.root.add(player.marker);
     }
   }
@@ -543,27 +753,23 @@ class IsometricArena {
       const position = this.worldPosition(player.px, player.py);
       let visual = this.players.get(player.id);
       if (!visual) {
-        const material = new THREE.SpriteMaterial({
-          transparent: true,
-          alphaTest: 0.2,
-          depthWrite: false,
-        });
-        const sprite = new THREE.Sprite(material);
-        sprite.scale.set(0.82, 1.25, 1);
-        sprite.position.y = 0.76;
+        const parts = this.createBomberModel(player.id);
         const root = new THREE.Group();
         root.position.copy(position);
-        root.add(this.createShadow(0.62), sprite);
+        root.add(this.createShadow(0.62), parts.model);
         const marker = this.makeMarker(player.id, this.highlighted.includes(player.id));
-        marker.position.y = 1.62;
+        marker.position.y = 1.72;
         root.add(marker);
         visual = {
           root,
-          sprite,
-          material,
+          model: parts.model,
+          leftArm: parts.leftArm,
+          rightArm: parts.rightArm,
+          leftLeg: parts.leftLeg,
+          rightLeg: parts.rightLeg,
           marker,
           target: position.clone(),
-          appearance: '',
+          appearance: this.appearanceOf(player.id),
           facing: player.facing,
           moving: player.moving,
           alive: player.alive,
@@ -571,7 +777,6 @@ class IsometricArena {
         };
         this.players.set(player.id, visual);
         this.dynamicRoot.add(root);
-        void this.updatePlayerTexture(player.id, visual);
         this.refreshMarkers();
       }
       visual.target.copy(position);
@@ -585,7 +790,8 @@ class IsometricArena {
         visual.alive = true;
         visual.deathStarted = null;
         visual.root.visible = true;
-        visual.material.opacity = 1;
+        visual.model.rotation.set(0, 0, 0);
+        visual.model.scale.setScalar(1);
       }
     }
     for (const [id, visual] of this.players) {
@@ -834,7 +1040,7 @@ class IsometricArena {
     this.playerSkins = new Map(skins);
     for (const [id, player] of this.players) {
       const appearance = this.appearanceOf(id);
-      if (appearance !== player.appearance) void this.updatePlayerTexture(id, player);
+      if (appearance !== player.appearance) this.rebuildPlayerModel(id, player);
     }
     this.refreshMarkers();
   }
