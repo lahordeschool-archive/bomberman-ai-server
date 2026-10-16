@@ -164,6 +164,8 @@ class IsometricArena {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.domElement.setAttribute('aria-hidden', 'true');
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
@@ -173,6 +175,13 @@ class IsometricArena {
     const hemisphere = new THREE.HemisphereLight(0xd8efff, 0x172019, 2.25);
     const sun = new THREE.DirectionalLight(0xffefcf, 3.1);
     sun.position.set(-7, 13, 9);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.camera.left = -12;
+    sun.shadow.camera.right = 12;
+    sun.shadow.camera.top = 12;
+    sun.shadow.camera.bottom = -12;
+    sun.shadow.bias = -0.0015;
     this.scene.add(hemisphere, sun);
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -327,6 +336,7 @@ class IsometricArena {
     }
     mesh.instanceMatrix.needsUpdate = true;
     mesh.instanceColor!.needsUpdate = true;
+    mesh.receiveShadow = true;
     this.staticRoot.add(mesh);
 
     const base = new THREE.Mesh(
@@ -626,6 +636,12 @@ class IsometricArena {
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.27, 14, 10), materials.trim);
     body.position.y = 0.57;
     body.scale.y = 0.9;
+    const bodyOutline = new THREE.Mesh(
+      new THREE.SphereGeometry(0.27, 14, 10),
+      new THREE.MeshBasicMaterial({ color: 0x11131a, side: THREE.BackSide }),
+    );
+    bodyOutline.position.copy(body.position);
+    bodyOutline.scale.set(1.055, 0.95, 1.055);
     const belt = new THREE.Mesh(new THREE.TorusGeometry(0.245, 0.035, 7, 16), materials.dark);
     belt.position.y = 0.51;
     belt.rotation.x = Math.PI / 2;
@@ -633,6 +649,12 @@ class IsometricArena {
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 12), materials.suit);
     head.position.y = 0.96;
     head.scale.set(1.04, 1, 0.98);
+    const headOutline = new THREE.Mesh(
+      new THREE.SphereGeometry(0.32, 16, 12),
+      new THREE.MeshBasicMaterial({ color: 0x11131a, side: THREE.BackSide }),
+    );
+    headOutline.position.copy(head.position);
+    headOutline.scale.set(1.095, 1.055, 1.035);
     const face = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.18, 0.055), materials.dark);
     face.position.set(0, 0.96, 0.293);
     const eyeMaterial = this.toon(0xfafcff);
@@ -655,8 +677,10 @@ class IsometricArena {
 
     model.add(
       body,
+      bodyOutline,
       belt,
       head,
+      headOutline,
       face,
       eyeLeft,
       eyeRight,
@@ -668,6 +692,9 @@ class IsometricArena {
       rightLeg,
     );
     this.addSkinDetails(model, playerId, materials);
+    model.traverse((child) => {
+      if (child instanceof THREE.Mesh) child.castShadow = true;
+    });
     return { model, leftArm, rightArm, leftLeg, rightLeg };
   }
 
@@ -1041,6 +1068,24 @@ class IsometricArena {
     for (const [id, player] of this.players) {
       const appearance = this.appearanceOf(id);
       if (appearance !== player.appearance) this.rebuildPlayerModel(id, player);
+    }
+    for (const [id, bomb] of this.bombs) {
+      const position = bomb.root.position.clone();
+      bomb.root.removeFromParent();
+      disposeObject(bomb.root);
+      const replacement = this.createBomb(bomb.ownerId);
+      replacement.root.position.copy(position);
+      this.dynamicRoot.add(replacement.root);
+      this.bombs.set(id, replacement);
+    }
+    for (const [key, flame] of this.flames) {
+      const position = flame.root.position.clone();
+      flame.root.removeFromParent();
+      disposeObject(flame.root);
+      const replacement = this.createFlame(flame.kind, flame.ownerId);
+      replacement.root.position.copy(position);
+      this.dynamicRoot.add(replacement.root);
+      this.flames.set(key, replacement);
     }
     this.refreshMarkers();
   }
