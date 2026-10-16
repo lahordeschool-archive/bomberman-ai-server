@@ -3,7 +3,7 @@ import {
   type FlameKind,
   GRID_HEIGHT,
   GRID_WIDTH,
-  ITEM_SPRITE_FRAMES,
+  type ItemType,
   PLAYER_COLORS,
   type Snapshot,
   type SnapshotPlayer,
@@ -85,6 +85,7 @@ interface BombVisual {
 
 interface FlameVisual {
   root: THREE.Group;
+  core: THREE.Object3D;
   ownerId: number;
   kind: FlameKind;
   phase: number;
@@ -121,13 +122,11 @@ class IsometricArena {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.OrthographicCamera();
   private readonly renderer: THREE.WebGLRenderer;
-  private readonly loader = new THREE.TextureLoader();
-  private readonly textureCache = new Map<string, Promise<THREE.Texture>>();
   private readonly staticRoot = new THREE.Group();
   private readonly dynamicRoot = new THREE.Group();
   private readonly hardWalls = new Map<number, THREE.Group>();
   private readonly softWalls = new Map<number, THREE.Group>();
-  private readonly items = new Map<string, THREE.Sprite>();
+  private readonly items = new Map<string, THREE.Group>();
   private readonly bombs = new Map<number, BombVisual>();
   private readonly flames = new Map<string, FlameVisual>();
   private readonly players = new Map<number, PlayerVisual>();
@@ -344,9 +343,14 @@ class IsometricArena {
         bomb.root.rotation.y += delta * 0.7;
       }
       for (const flame of this.flames.values()) {
-        const pulse = 0.88 + Math.sin(now / 48 + flame.phase) * 0.16;
-        flame.root.scale.set(pulse, 0.9 + pulse * 0.2, pulse);
-        flame.root.rotation.y += delta * 1.8;
+        const pulse = 0.96 + Math.sin(now / 48 + flame.phase) * 0.06;
+        flame.root.scale.set(pulse, 0.92 + pulse * 0.12, pulse);
+        if (flame.kind === 'center') flame.core.rotation.y += delta * 3.2;
+      }
+      for (const item of this.items.values()) {
+        const phase = Number(item.userData.phase ?? 0);
+        item.rotation.y += delta * 1.25;
+        item.position.y = Number(item.userData.baseY ?? 0.4) + Math.sin(now / 260 + phase) * 0.07;
       }
       for (const warning of this.warnings.values()) {
         const material = warning.material as THREE.MeshBasicMaterial;
@@ -577,21 +581,6 @@ class IsometricArena {
         }
       }
     }
-  }
-
-  private loadTexture(path: string): Promise<THREE.Texture> {
-    let texture = this.textureCache.get(path);
-    if (!texture) {
-      texture = this.loader.loadAsync(path).then((loaded) => {
-        loaded.colorSpace = THREE.SRGBColorSpace;
-        loaded.magFilter = THREE.NearestFilter;
-        loaded.minFilter = THREE.NearestFilter;
-        loaded.generateMipmaps = false;
-        return loaded;
-      });
-      this.textureCache.set(path, texture);
-    }
-    return texture;
   }
 
   private appearanceOf(playerId: number): string {
@@ -841,19 +830,6 @@ class IsometricArena {
     visual.root.add(visual.model);
   }
 
-  private setAtlasFrame(
-    texture: THREE.Texture | null,
-    frame: number,
-    columns: number,
-    rows: number,
-  ): void {
-    if (!texture) return;
-    const column = frame % columns;
-    const row = Math.floor(frame / columns);
-    texture.repeat.set(1 / columns, 1 / rows);
-    texture.offset.set(column / columns, 1 - (row + 1) / rows);
-  }
-
   private makeMarker(playerId: number, own: boolean): THREE.Sprite {
     const colors = assignPlayerColors(
       [...this.players.keys(), playerId]
@@ -962,11 +938,12 @@ class IsometricArena {
   private createBomb(ownerId: number): BombVisual {
     const skin = this.playerSkins.get(ownerId);
     const accent = skin ? SKIN_ACCENTS[skin] : SLOT_COLOR_SWATCHES[colorOf(ownerId)];
+    const shell = new THREE.Color(0x14161d).lerp(new THREE.Color(accent), skin ? 0.22 : 0.08);
     const root = new THREE.Group();
     const body = new THREE.Mesh(
       new THREE.IcosahedronGeometry(0.31, 2),
       new THREE.MeshStandardMaterial({
-        color: 0x171820,
+        color: shell,
         roughness: 0.35,
         metalness: 0.45,
       }),
@@ -977,13 +954,28 @@ class IsometricArena {
       this.material(accent, 0.36),
     );
     cap.position.y = 0.68;
+    const band = new THREE.Mesh(
+      new THREE.TorusGeometry(0.315, 0.025, 6, 20),
+      new THREE.MeshBasicMaterial({ color: accent }),
+    );
+    band.position.y = 0.38;
+    band.rotation.x = Math.PI / 2;
     const fuse = new THREE.Mesh(
       new THREE.CylinderGeometry(0.025, 0.025, 0.2, 6),
       new THREE.MeshBasicMaterial({ color: 0xffc24c }),
     );
     fuse.position.set(0.06, 0.8, 0);
     fuse.rotation.z = -0.35;
-    root.add(this.createShadow(0.66), body, cap, fuse);
+    const spark = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.07, 0),
+      new THREE.MeshBasicMaterial({
+        color: 0xfff09a,
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+      }),
+    );
+    spark.position.set(0.095, 0.9, 0);
+    root.add(this.createShadow(0.66), body, band, cap, fuse, spark);
     return { root, ownerId, phase: Math.random() * Math.PI * 2 };
   }
 
@@ -1009,27 +1001,92 @@ class IsometricArena {
     const skin = this.playerSkins.get(ownerId);
     const accent = skin ? SKIN_ACCENTS[skin] : SLOT_COLOR_SWATCHES[colorOf(ownerId)];
     const root = new THREE.Group();
-    const material = new THREE.MeshBasicMaterial({
-      color: accent,
-      transparent: true,
-      opacity: 0.94,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.36, 1), material);
-    core.position.y = 0.43;
-    core.scale.y = 1.35;
-    root.add(core);
-    const horizontal = kind === 'horizontal' || kind === 'endLeft' || kind === 'endRight';
-    const vertical = kind === 'vertical' || kind === 'endUp' || kind === 'endDown';
-    if (horizontal || vertical) {
-      const beam = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 0.5, 3, 8), material.clone());
-      beam.position.y = 0.39;
-      beam.rotation.z = Math.PI / 2;
-      beam.rotation.y = vertical ? Math.PI / 2 : 0;
-      root.add(beam);
+    const fireMaterial = (color: THREE.ColorRepresentation, opacity: number) =>
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+    const outerMaterial = fireMaterial(0xff3d0a, 0.78);
+    const hotMaterial = fireMaterial(0xffd83d, 0.98);
+    const haloMaterial = fireMaterial(accent, 0.24);
+    const horizontal = kind === 'horizontal';
+    const vertical = kind === 'vertical';
+    const center = kind === 'center';
+    const end = !horizontal && !vertical && !center;
+
+    const outerGeometry = center
+      ? new THREE.SphereGeometry(0.43, 12, 8)
+      : horizontal
+        ? new THREE.BoxGeometry(1.08, 0.46, 0.54)
+        : vertical
+          ? new THREE.BoxGeometry(0.54, 0.46, 1.08)
+          : new THREE.BoxGeometry(
+              kind === 'endLeft' || kind === 'endRight' ? 0.9 : 0.54,
+              0.46,
+              kind === 'endUp' || kind === 'endDown' ? 0.9 : 0.54,
+            );
+    const hotGeometry = center
+      ? new THREE.OctahedronGeometry(0.32, 1)
+      : horizontal
+        ? new THREE.BoxGeometry(1.02, 0.27, 0.28)
+        : vertical
+          ? new THREE.BoxGeometry(0.28, 0.27, 1.02)
+          : new THREE.BoxGeometry(
+              kind === 'endLeft' || kind === 'endRight' ? 0.82 : 0.28,
+              0.27,
+              kind === 'endUp' || kind === 'endDown' ? 0.82 : 0.28,
+            );
+    const halo = new THREE.Mesh(outerGeometry.clone(), haloMaterial);
+    const outer = new THREE.Mesh(outerGeometry, outerMaterial);
+    const core = new THREE.Mesh(hotGeometry, hotMaterial);
+    halo.position.y = 0.34;
+    halo.scale.set(1.16, 1.08, 1.16);
+    outer.position.y = 0.35;
+    core.position.y = 0.39;
+
+    if (end) {
+      const direction =
+        kind === 'endLeft'
+          ? [-1, 0]
+          : kind === 'endRight'
+            ? [1, 0]
+            : kind === 'endUp'
+              ? [0, -1]
+              : [0, 1];
+      const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.36, 1), outerMaterial.clone());
+      const hotTip = new THREE.Mesh(new THREE.OctahedronGeometry(0.23, 1), hotMaterial.clone());
+      tip.position.set(direction[0] * 0.34, 0.39, direction[1] * 0.34);
+      hotTip.position.set(direction[0] * 0.37, 0.41, direction[1] * 0.37);
+      tip.scale.set(direction[0] === 0 ? 0.78 : 1.3, 1, direction[1] === 0 ? 0.78 : 1.3);
+      root.add(tip, hotTip);
     }
-    return { root, ownerId, kind, phase: Math.random() * Math.PI * 2 };
+
+    const groundGlow = new THREE.Mesh(
+      new THREE.CircleGeometry(0.5, 18),
+      new THREE.MeshBasicMaterial({
+        color: 0xff5b16,
+        transparent: true,
+        opacity: 0.34,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    groundGlow.rotation.x = -Math.PI / 2;
+    groundGlow.position.y = 0.085;
+    if (horizontal) groundGlow.scale.x = 1.7;
+    if (vertical) groundGlow.scale.y = 1.7;
+
+    root.add(groundGlow, halo, outer, core);
+    return {
+      root,
+      core,
+      ownerId,
+      kind,
+      phase: Math.random() * Math.PI * 2,
+    };
   }
 
   private syncFlames(snapshot: Snapshot): void {
@@ -1056,21 +1113,102 @@ class IsometricArena {
     }
   }
 
-  private async makeItem(frame: number): Promise<THREE.Sprite> {
-    const source = await this.loadTexture(`${ASSETS}/sprites/snes_items.png`);
-    const texture = source.clone();
-    texture.needsUpdate = true;
-    this.setAtlasFrame(texture, frame, 8, 8);
-    const sprite = new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map: texture,
+  private createItem(type: ItemType): THREE.Group {
+    const root = new THREE.Group();
+    const glowColor =
+      type === 'extraBomb'
+        ? 0x6ea7ff
+        : type === 'flameUp'
+          ? 0xff7438
+          : type === 'maxFlame'
+            ? 0xffd43d
+            : type === 'speedUp'
+              ? 0x4de6ff
+              : 0xff6680;
+    const glow = new THREE.Mesh(
+      new THREE.TorusGeometry(0.3, 0.035, 6, 20),
+      new THREE.MeshBasicMaterial({
+        color: glowColor,
         transparent: true,
-        alphaTest: 0.2,
-        depthWrite: false,
+        opacity: 0.85,
       }),
     );
-    sprite.scale.setScalar(0.64);
-    return sprite;
+    glow.rotation.x = Math.PI / 2;
+    glow.position.y = 0.08;
+    root.add(this.createShadow(0.58), glow);
+
+    if (type === 'extraBomb') {
+      const bomb = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(0.22, 1),
+        new THREE.MeshStandardMaterial({
+          color: 0x171a22,
+          roughness: 0.32,
+          metalness: 0.5,
+        }),
+      );
+      bomb.position.y = 0.34;
+      const fuse = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.02, 0.02, 0.16, 6),
+        new THREE.MeshBasicMaterial({ color: 0xffc94e }),
+      );
+      fuse.position.set(0.04, 0.56, 0);
+      fuse.rotation.z = -0.35;
+      root.add(bomb, fuse);
+    } else if (type === 'flameUp' || type === 'maxFlame') {
+      const outer = new THREE.Mesh(
+        new THREE.OctahedronGeometry(type === 'maxFlame' ? 0.29 : 0.25, 1),
+        new THREE.MeshBasicMaterial({
+          color: type === 'maxFlame' ? 0xff5a18 : 0xff3614,
+          transparent: true,
+          opacity: 0.9,
+          blending: THREE.AdditiveBlending,
+        }),
+      );
+      outer.position.y = 0.36;
+      outer.scale.y = type === 'maxFlame' ? 1.25 : 1.55;
+      const hot = new THREE.Mesh(
+        new THREE.OctahedronGeometry(type === 'maxFlame' ? 0.17 : 0.14, 1),
+        new THREE.MeshBasicMaterial({ color: 0xffed63 }),
+      );
+      hot.position.y = 0.37;
+      hot.scale.y = outer.scale.y;
+      root.add(outer, hot);
+      if (type === 'maxFlame') {
+        const crown = new THREE.Mesh(
+          new THREE.TorusGeometry(0.31, 0.035, 6, 16),
+          new THREE.MeshBasicMaterial({ color: 0xffd43d }),
+        );
+        crown.position.y = 0.37;
+        crown.rotation.x = Math.PI / 2;
+        root.add(crown);
+      }
+    } else {
+      const fast = type === 'speedUp';
+      const bootMaterial = this.toon(fast ? 0x35c8f0 : 0xf0526b);
+      const boot = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.28, 0.24), bootMaterial);
+      boot.position.set(-0.08, 0.3, -0.02);
+      const toe = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.14, 0.28), bootMaterial);
+      toe.position.set(0.03, 0.2, 0.08);
+      const sole = new THREE.Mesh(
+        new THREE.BoxGeometry(0.39, 0.05, 0.31),
+        new THREE.MeshBasicMaterial({ color: 0xf4f5ef }),
+      );
+      sole.position.set(0.03, 0.11, 0.08);
+      root.add(boot, toe, sole);
+      if (fast) {
+        for (const offset of [-0.14, 0, 0.14]) {
+          const streak = new THREE.Mesh(
+            new THREE.BoxGeometry(0.08, 0.025, 0.025),
+            new THREE.MeshBasicMaterial({ color: 0xd4fbff }),
+          );
+          streak.position.set(-0.3 - Math.abs(offset) * 0.4, 0.24 + offset, 0);
+          root.add(streak);
+        }
+      }
+    }
+    root.userData.baseY = 0.16;
+    root.userData.phase = Math.random() * Math.PI * 2;
+    return root;
   }
 
   private syncItems(snapshot: Snapshot): void {
@@ -1079,23 +1217,15 @@ class IsometricArena {
       const key = cellKey(item.x, item.y);
       seen.add(key);
       if (this.items.has(key)) continue;
-      // Reserve the key before loading so rapid snapshots cannot duplicate it.
-      const placeholder = new THREE.Sprite();
-      this.items.set(key, placeholder);
-      void this.makeItem(ITEM_SPRITE_FRAMES[item.type]).then((sprite) => {
-        if (this.items.get(key) !== placeholder) {
-          disposeObject(sprite);
-          return;
-        }
-        sprite.position.copy(this.worldPosition(item.x, item.y, 0.45));
-        this.items.set(key, sprite);
-        this.dynamicRoot.add(sprite);
-      });
+      const pickup = this.createItem(item.type);
+      pickup.position.copy(this.worldPosition(item.x, item.y, Number(pickup.userData.baseY)));
+      this.items.set(key, pickup);
+      this.dynamicRoot.add(pickup);
     }
-    for (const [key, sprite] of this.items) {
+    for (const [key, pickup] of this.items) {
       if (seen.has(key)) continue;
-      sprite.removeFromParent();
-      disposeObject(sprite);
+      pickup.removeFromParent();
+      disposeObject(pickup);
       this.items.delete(key);
     }
   }
@@ -1268,10 +1398,6 @@ class IsometricArena {
     this.resizeObserver.disconnect();
     this.visibilityObserver.disconnect();
     this.clear();
-    for (const promise of this.textureCache.values()) {
-      void promise.then((texture) => texture.dispose());
-    }
-    this.textureCache.clear();
     this.renderer.dispose();
     this.renderer.domElement.remove();
     this.audio?.pause();
