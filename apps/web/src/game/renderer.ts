@@ -1009,8 +1009,13 @@ class IsometricArena {
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       });
-    const outerMaterial = fireMaterial(0xff3d0a, 0.78);
-    const hotMaterial = fireMaterial(0xffd83d, 0.98);
+    const outerMaterial = fireMaterial(0xff3d0a, 0.72);
+    const hotMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffc21c,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+    });
     const haloMaterial = fireMaterial(accent, 0.24);
     const horizontal = kind === 'horizontal';
     const vertical = kind === 'vertical';
