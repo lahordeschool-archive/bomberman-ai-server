@@ -95,9 +95,14 @@ body, and a 256 KB response. `BOT_FETCH=off` disables network access entirely.
 - **Arena** (`apps/server/src/arena`): runs matches in real time, streams snapshots to
   the `match:<id>` Socket.IO room, then stores the outcome, the replay log, and rating
   changes in one transaction. Matches interrupted by a restart are marked aborted.
-- **Matchmaker**: the queued bot that waited longest is matched with the closest rated
-  queued bots; house bots (the public samples) fill empty seats. Concurrency is
-  capped by `RANKED_CONCURRENCY`.
+- **Matchmaker**: the queued bot that waited longest anchors the match. Up to three
+  opponents are chosen by smallest absolute rating gap, with queue order breaking
+  ties, and a player can occupy only one seat per ranked match. If that global anchor
+  is still playing, matchmaking waits instead of rematching newer available bots;
+  it also waits rather than filling a partial human lineup while other queued bots
+  are busy. This prevents concurrent matches from becoming permanent cohorts. House
+  bots (the public samples) fill empty seats only when no running queued bot could
+  complete the lineup. Concurrency is capped by `RANKED_CONCURRENCY`.
 - **Ratings**: multiplayer Elo. Each match is scored as every pairwise duel
   (K = 32 scaled by 1 / (n − 1)); ties share points. `npm run ratings:rebuild`
   recomputes everything from stored placements.
