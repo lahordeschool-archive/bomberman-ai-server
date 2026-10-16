@@ -33,18 +33,22 @@ interface Pick {
  *
  * The queue is already ordered by waiting time. Its first bot anchors the match;
  * opponents are the closest-rated bots owned by other players. Queue order breaks
- * equal rating-distance ties, and no owner can occupy more than one seat.
+ * equal rating-distance ties, and no owner can occupy more than one seat. A partial
+ * human lineup waits while another queued bot is busy instead of being padded with
+ * house bots.
  */
 export function selectRankedEntrants(
   queue: QueueEntry[],
+  busyBotIds: ReadonlySet<string> = new Set(),
   maxPlayers = MAX_PLAYERS_PER_MATCH,
 ): QueueEntry[] {
   const anchor = queue[0];
-  if (!anchor || maxPlayers <= 0) return [];
+  if (!anchor || busyBotIds.has(anchor.botId) || maxPlayers <= 0) return [];
 
   const ownerIds = new Set([anchor.ownerId]);
   const opponents = queue
     .slice(1)
+    .filter((entry) => !busyBotIds.has(entry.botId))
     .map((entry, queueIndex) => ({
       entry,
       queueIndex,
@@ -58,6 +62,9 @@ export function selectRankedEntrants(
     selected.push(entry);
     ownerIds.add(entry.ownerId);
     if (selected.length >= maxPlayers) break;
+  }
+  if (selected.length < maxPlayers && queue.some((entry) => busyBotIds.has(entry.botId))) {
+    return [];
   }
   return selected;
 }
@@ -141,11 +148,11 @@ export class Matchmaker {
         started.push(matchId);
         continue;
       }
-      const queue = (await listQueue(this.context.db, 200)).filter(
-        (entry) => !busy.has(entry.botId),
-      );
+      const queue = await listQueue(this.context.db, 200);
       if (queue.length === 0) break;
-      const matchId = await this.startMatch(this.pick(queue), 'ranked');
+      const entrants = selectRankedEntrants(queue, busy);
+      if (entrants.length === 0) break;
+      const matchId = await this.startMatch(this.pick(entrants), 'ranked');
       if (!matchId) break;
       started.push(matchId);
     }
@@ -179,7 +186,7 @@ export class Matchmaker {
   }
 
   private pick(queue: QueueEntry[]): Pick[] {
-    const picks: Pick[] = selectRankedEntrants(queue).map((entry) => ({
+    const picks: Pick[] = queue.map((entry) => ({
       botId: entry.botId,
       versionId: entry.versionId,
       name: entry.botName,

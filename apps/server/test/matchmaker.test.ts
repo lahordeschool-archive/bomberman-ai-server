@@ -56,4 +56,38 @@ describe('ranked entrant selection', () => {
 
     expect(selectRankedEntrants(queue).map((entry) => entry.botId)).toEqual(['oldest']);
   });
+
+  it('waits when the globally longest-waiting bot is still playing', () => {
+    const queue = [queued('oldest-busy', 'owner-a', 1200), queued('newer-free', 'owner-b', 1200)];
+
+    expect(selectRankedEntrants(queue, new Set(['oldest-busy']))).toEqual([]);
+  });
+
+  it('waits rather than padding a partial human lineup while another bot is busy', () => {
+    const queue = [
+      queued('anchor', 'owner-a', 1200),
+      queued('closest-busy', 'owner-b', 1201),
+      queued('closest-free', 'owner-c', 1202),
+      queued('other-free', 'owner-d', 1250),
+    ];
+
+    expect(selectRankedEntrants(queue, new Set(['closest-busy']))).toEqual([]);
+  });
+
+  it('starts another full human match while unrelated queued bots are busy', () => {
+    const queue = [
+      queued('anchor', 'owner-a', 1200),
+      queued('busy', 'owner-b', 1201),
+      queued('free-b', 'owner-c', 1202),
+      queued('free-c', 'owner-d', 1203),
+      queued('free-d', 'owner-e', 1204),
+    ];
+
+    expect(selectRankedEntrants(queue, new Set(['busy'])).map((entry) => entry.botId)).toEqual([
+      'anchor',
+      'free-b',
+      'free-c',
+      'free-d',
+    ]);
+  });
 });
