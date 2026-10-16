@@ -16,6 +16,7 @@ import { assignPlayerColors, SLOT_COLOR_SWATCHES } from './player-colors.ts';
 const VIEW_ASPECT = 16 / 10;
 const ASSETS = '/game';
 const WORLD_Y = 0.08;
+const PLAYER_SCALE = 1.12;
 
 const SKIN_ACCENTS: Record<SkinSlug, string> = {
   ember: '#ff7018',
@@ -253,12 +254,12 @@ class IsometricArena {
               : player.facing === 'right'
                 ? Math.PI / 2
                 : 0;
-        player.marker.position.y = 1.72 + Math.sin(now / 180) * 0.045;
+        player.marker.position.y = 1.88 + Math.sin(now / 180) * 0.045;
       } else if (player.deathStarted !== null) {
         const progress = Math.min(1, (now - player.deathStarted) / 700);
         player.model.rotation.z = progress * Math.PI * 0.5;
         player.model.rotation.y += delta * 8;
-        player.model.scale.setScalar(1 - progress * 0.65);
+        player.model.scale.setScalar(PLAYER_SCALE * (1 - progress * 0.65));
         if (progress === 1) player.root.visible = false;
       }
     }
@@ -692,6 +693,7 @@ class IsometricArena {
       rightLeg,
     );
     this.addSkinDetails(model, playerId, materials);
+    model.scale.setScalar(PLAYER_SCALE);
     model.traverse((child) => {
       if (child instanceof THREE.Mesh) child.castShadow = true;
     });
@@ -768,7 +770,7 @@ class IsometricArena {
       player.marker.removeFromParent();
       disposeObject(player.marker);
       player.marker = this.makeMarker(id, this.highlighted.includes(id));
-      player.marker.position.y = 1.72;
+      player.marker.position.y = 1.88;
       player.root.add(player.marker);
     }
   }
@@ -785,7 +787,7 @@ class IsometricArena {
         root.position.copy(position);
         root.add(this.createShadow(0.62), parts.model);
         const marker = this.makeMarker(player.id, this.highlighted.includes(player.id));
-        marker.position.y = 1.72;
+        marker.position.y = 1.88;
         root.add(marker);
         visual = {
           root,
@@ -818,7 +820,7 @@ class IsometricArena {
         visual.deathStarted = null;
         visual.root.visible = true;
         visual.model.rotation.set(0, 0, 0);
-        visual.model.scale.setScalar(1);
+        visual.model.scale.setScalar(PLAYER_SCALE);
       }
     }
     for (const [id, visual] of this.players) {
