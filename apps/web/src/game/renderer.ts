@@ -33,8 +33,7 @@ const SKIN_ACCENTS: Record<SkinSlug, string> = {
 
 const THEMES = {
   grass: {
-    background: 0x101a14,
-    fog: 0x101a14,
+    background: 0x24372b,
     floor: 0x6c9b52,
     floorAlt: 0x75a65a,
     hard: 0x789075,
@@ -43,8 +42,7 @@ const THEMES = {
     softDark: 0x6d3f27,
   },
   cave: {
-    background: 0x171110,
-    fog: 0x171110,
+    background: 0x352a26,
     floor: 0x594337,
     floorAlt: 0x624a3c,
     hard: 0x51443e,
@@ -53,8 +51,7 @@ const THEMES = {
     softDark: 0x53372b,
   },
   water: {
-    background: 0x071821,
-    fog: 0x071821,
+    background: 0x173642,
     floor: 0x247b9a,
     floorAlt: 0x2b89aa,
     hard: 0x537a82,
@@ -152,6 +149,10 @@ class IsometricArena {
   private playerSkins = new Map<number, SkinSlug>();
   private closingAnnounced = false;
   private audio: HTMLAudioElement | null = null;
+  private cameraYaw = 0;
+  private cameraElevation = THREE.MathUtils.degToRad(62);
+  private cameraZoom = 1;
+  private cameraDrag: { pointerId: number; x: number; y: number } | null = null;
 
   constructor(parent: HTMLElement) {
     this.parent = parent;
@@ -170,8 +171,21 @@ class IsometricArena {
     this.renderer.domElement.setAttribute('aria-hidden', 'true');
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
+    this.renderer.domElement.style.cursor = 'grab';
+    this.renderer.domElement.style.touchAction = 'none';
     parent.replaceChildren(this.renderer.domElement);
     parent.style.aspectRatio = `${VIEW_ASPECT}`;
+    parent.setAttribute(
+      'aria-description',
+      'Drag to rotate the arena, use the wheel to zoom, and double-click to reset the camera.',
+    );
+    parent.title = 'Drag to rotate · Scroll to zoom · Double-click to reset';
+    this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
+    this.renderer.domElement.addEventListener('pointermove', this.onPointerMove);
+    this.renderer.domElement.addEventListener('pointerup', this.onPointerUp);
+    this.renderer.domElement.addEventListener('pointercancel', this.onPointerUp);
+    this.renderer.domElement.addEventListener('wheel', this.onWheel, { passive: false });
+    this.renderer.domElement.addEventListener('dblclick', this.resetCamera);
 
     const hemisphere = new THREE.HemisphereLight(0xd8efff, 0x172019, 2.25);
     const sun = new THREE.DirectionalLight(0xffefcf, 3.1);
@@ -208,9 +222,9 @@ class IsometricArena {
   }
 
   private fitCamera(): void {
-    // Battle-mode framing: mostly front-facing, with enough yaw to read block depth.
-    // This keeps grid directions obvious instead of turning the board into a diamond.
-    const halfHeight = this.height * 0.34 + this.width * 0.08 + 1.7;
+    // A near top-down, zero-yaw battle view keeps the grid aligned with the screen,
+    // like the fixed multiplayer cameras used by 3D Bomberman games.
+    const halfHeight = (this.width + this.height) * 0.2 + 2;
     const halfWidth = halfHeight * VIEW_ASPECT;
     this.camera.left = -halfWidth;
     this.camera.right = halfWidth;
@@ -218,10 +232,69 @@ class IsometricArena {
     this.camera.bottom = -halfHeight;
     this.camera.near = 0.1;
     this.camera.far = 80;
-    this.camera.position.set(6.5, 18.5, 22);
+    this.updateCamera();
+  }
+
+  private updateCamera(): void {
+    const distance = 32;
+    const horizontal = Math.cos(this.cameraElevation) * distance;
+    this.camera.position.set(
+      Math.sin(this.cameraYaw) * horizontal,
+      Math.sin(this.cameraElevation) * distance,
+      Math.cos(this.cameraYaw) * horizontal,
+    );
+    this.camera.zoom = this.cameraZoom;
     this.camera.lookAt(0, 0.15, 0);
     this.camera.updateProjectionMatrix();
   }
+
+  private readonly onPointerDown = (event: PointerEvent): void => {
+    if (event.button !== 0) return;
+    this.cameraDrag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+    this.renderer.domElement.setPointerCapture(event.pointerId);
+    this.renderer.domElement.style.cursor = 'grabbing';
+  };
+
+  private readonly onPointerMove = (event: PointerEvent): void => {
+    if (!this.cameraDrag || this.cameraDrag.pointerId !== event.pointerId) return;
+    const dx = event.clientX - this.cameraDrag.x;
+    const dy = event.clientY - this.cameraDrag.y;
+    this.cameraDrag.x = event.clientX;
+    this.cameraDrag.y = event.clientY;
+    this.cameraYaw -= dx * 0.006;
+    this.cameraElevation = THREE.MathUtils.clamp(
+      this.cameraElevation + dy * 0.004,
+      THREE.MathUtils.degToRad(50),
+      THREE.MathUtils.degToRad(76),
+    );
+    this.updateCamera();
+  };
+
+  private readonly onPointerUp = (event: PointerEvent): void => {
+    if (!this.cameraDrag || this.cameraDrag.pointerId !== event.pointerId) return;
+    this.cameraDrag = null;
+    if (this.renderer.domElement.hasPointerCapture(event.pointerId)) {
+      this.renderer.domElement.releasePointerCapture(event.pointerId);
+    }
+    this.renderer.domElement.style.cursor = 'grab';
+  };
+
+  private readonly onWheel = (event: WheelEvent): void => {
+    event.preventDefault();
+    this.cameraZoom = THREE.MathUtils.clamp(
+      this.cameraZoom * Math.exp(-event.deltaY * 0.001),
+      0.82,
+      1.45,
+    );
+    this.updateCamera();
+  };
+
+  private readonly resetCamera = (): void => {
+    this.cameraYaw = 0;
+    this.cameraElevation = THREE.MathUtils.degToRad(62);
+    this.cameraZoom = 1;
+    this.updateCamera();
+  };
 
   private scheduleFrame(): void {
     if (!this.visible || this.frame) return;
@@ -319,6 +392,61 @@ class IsometricArena {
 
   private buildFloor(theme: Snapshot['theme']): void {
     const palette = THEMES[theme];
+    const surround = new THREE.Mesh(
+      new THREE.BoxGeometry(this.width + 2.6, 0.26, this.height + 2.6),
+      new THREE.MeshStandardMaterial({
+        color: theme === 'water' ? 0x406470 : theme === 'grass' ? 0x526158 : 0x5d5650,
+        roughness: 0.64,
+        metalness: 0.32,
+      }),
+    );
+    surround.position.y = -0.38;
+    surround.receiveShadow = true;
+    this.staticRoot.add(surround);
+
+    const railMaterial = new THREE.MeshStandardMaterial({
+      color: 0x747a78,
+      roughness: 0.55,
+      metalness: 0.48,
+    });
+    const frontRail = new THREE.Mesh(
+      new THREE.BoxGeometry(this.width + 1.8, 0.28, 0.72),
+      railMaterial,
+    );
+    const backRail = frontRail.clone();
+    frontRail.position.set(0, -0.07, this.height / 2 + 0.58);
+    backRail.position.set(0, -0.07, -this.height / 2 - 0.58);
+    const leftRail = new THREE.Mesh(
+      new THREE.BoxGeometry(0.72, 0.28, this.height + 1.8),
+      railMaterial,
+    );
+    const rightRail = leftRail.clone();
+    leftRail.position.set(-this.width / 2 - 0.58, -0.07, 0);
+    rightRail.position.set(this.width / 2 + 0.58, -0.07, 0);
+    this.staticRoot.add(frontRail, backRail, leftRail, rightRail);
+
+    const rivetPositions: [number, number][] = [];
+    for (let x = 0; x < this.width + 1; x++) {
+      const worldX = x - this.width / 2;
+      rivetPositions.push([worldX, -this.height / 2 - 0.58], [worldX, this.height / 2 + 0.58]);
+    }
+    for (let y = 0; y < this.height + 1; y++) {
+      const worldZ = y - this.height / 2;
+      rivetPositions.push([-this.width / 2 - 0.58, worldZ], [this.width / 2 + 0.58, worldZ]);
+    }
+    const rivets = new THREE.InstancedMesh(
+      new THREE.SphereGeometry(0.055, 7, 5),
+      new THREE.MeshStandardMaterial({ color: 0x282c2c, roughness: 0.4, metalness: 0.65 }),
+      rivetPositions.length,
+    );
+    const rivetMatrix = new THREE.Matrix4();
+    rivetPositions.forEach(([x, z], index) => {
+      rivetMatrix.makeTranslation(x, 0.095, z);
+      rivets.setMatrixAt(index, rivetMatrix);
+    });
+    rivets.instanceMatrix.needsUpdate = true;
+    this.staticRoot.add(rivets);
+
     const geometry = new THREE.BoxGeometry(0.98, 0.12, 0.98);
     const mesh = new THREE.InstancedMesh(
       geometry,
@@ -403,7 +531,7 @@ class IsometricArena {
       this.width = snapshot.width;
       this.height = snapshot.height;
       this.scene.background = new THREE.Color(THEMES[snapshot.theme].background);
-      this.scene.fog = new THREE.Fog(THEMES[snapshot.theme].fog, 19, 38);
+      this.scene.fog = null;
       this.buildFloor(snapshot.theme);
       this.fitCamera();
     }
@@ -1131,6 +1259,12 @@ class IsometricArena {
   destroy(): void {
     cancelAnimationFrame(this.frame);
     this.frame = 0;
+    this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);
+    this.renderer.domElement.removeEventListener('pointermove', this.onPointerMove);
+    this.renderer.domElement.removeEventListener('pointerup', this.onPointerUp);
+    this.renderer.domElement.removeEventListener('pointercancel', this.onPointerUp);
+    this.renderer.domElement.removeEventListener('wheel', this.onWheel);
+    this.renderer.domElement.removeEventListener('dblclick', this.resetCamera);
     this.resizeObserver.disconnect();
     this.visibilityObserver.disconnect();
     this.clear();
