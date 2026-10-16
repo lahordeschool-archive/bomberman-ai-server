@@ -29,9 +29,44 @@ interface Pick {
 }
 
 /**
+ * Selects human-owned entrants for a ranked match.
+ *
+ * The queue is already ordered by waiting time. Its first bot anchors the match;
+ * opponents are the closest-rated bots owned by other players. Queue order breaks
+ * equal rating-distance ties, and no owner can occupy more than one seat.
+ */
+export function selectRankedEntrants(
+  queue: QueueEntry[],
+  maxPlayers = MAX_PLAYERS_PER_MATCH,
+): QueueEntry[] {
+  const anchor = queue[0];
+  if (!anchor || maxPlayers <= 0) return [];
+
+  const ownerIds = new Set([anchor.ownerId]);
+  const opponents = queue
+    .slice(1)
+    .map((entry, queueIndex) => ({
+      entry,
+      queueIndex,
+      ratingDistance: Math.abs(entry.rating - anchor.rating),
+    }))
+    .sort((a, b) => a.ratingDistance - b.ratingDistance || a.queueIndex - b.queueIndex);
+  const selected = [anchor];
+  if (selected.length >= maxPlayers) return selected;
+  for (const { entry } of opponents) {
+    if (ownerIds.has(entry.ownerId)) continue;
+    selected.push(entry);
+    ownerIds.add(entry.ownerId);
+    if (selected.length >= maxPlayers) break;
+  }
+  return selected;
+}
+
+/**
  * Builds ranked matches from the queue: the bot that waited longest is matched with
- * the closest rated queued bots, and randomly drawn house bots fill the remaining seats. Every bot
- * runs inside the isolated runner; only these server completed matches are rated.
+ * the closest rated queued bots from distinct owners, and randomly drawn house bots
+ * fill the remaining seats. Every bot runs inside the isolated runner; only these
+ * server completed matches are rated.
  */
 export class Matchmaker {
   private readonly context: AppContext;
@@ -144,11 +179,7 @@ export class Matchmaker {
   }
 
   private pick(queue: QueueEntry[]): Pick[] {
-    const [anchor, ...rest] = queue;
-    const opponents = rest
-      .sort((a, b) => Math.abs(a.rating - anchor!.rating) - Math.abs(b.rating - anchor!.rating))
-      .slice(0, MAX_PLAYERS_PER_MATCH - 1);
-    const picks: Pick[] = [anchor!, ...opponents].map((entry) => ({
+    const picks: Pick[] = selectRankedEntrants(queue).map((entry) => ({
       botId: entry.botId,
       versionId: entry.versionId,
       name: entry.botName,
