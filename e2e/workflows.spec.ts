@@ -361,6 +361,7 @@ test.describe('casual rooms', () => {
     page,
     browser,
   }) => {
+    test.setTimeout(120_000);
     await register(page);
     await createBot(page, 'Host Bot');
     await setSource(page, WALKER.replace('walker ready', 'host online'));
@@ -389,7 +390,8 @@ test.describe('casual rooms', () => {
     await expect(page.getByText('(match in progress)')).toBeVisible();
 
     await page.getByRole('link', { name: 'Match over. Watch the replay' }).click({
-      timeout: 45_000,
+      // E2E matches can reach their 3,600-tick limit (54 seconds at 15 ms/tick).
+      timeout: 65_000,
     });
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Casual match');
     await expect(page.getByText('Replay verified')).toBeVisible({ timeout: 30_000 });
