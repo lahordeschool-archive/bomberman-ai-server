@@ -306,7 +306,7 @@ describe('bots and versions', () => {
     const bot = await player.request('POST', '/api/bots', { name: 'Well Dressed' });
     const initial = await player.request('GET', '/api/store');
     expect(initial.body.balance).toBe(0);
-    expect(initial.body.skins).toHaveLength(10);
+    expect(initial.body.skins).toHaveLength(11);
     expect(initial.body.skins.map((skin: { price: number }) => skin.price)).toEqual(
       [...initial.body.skins]
         .map((skin: { price: number }) => skin.price)
