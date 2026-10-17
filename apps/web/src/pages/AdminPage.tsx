@@ -4,6 +4,12 @@ import { Button, Card, ErrorMessage, Field, formatDate, Skeleton } from '../comp
 import { api } from '../lib/api.ts';
 import { useSession } from '../lib/session.tsx';
 
+const warningTitles = {
+  source_similarity: 'Very similar source code across accounts',
+  win_association: 'Unusual win rate with another bot present',
+  repeated_avoidable_death: 'Repeated avoidable deaths to the same bot',
+} as const;
+
 export default function AdminPage() {
   const { user } = useSession();
   const [data, setData] = useState<AdminOverview | null>(null);
@@ -66,6 +72,32 @@ export default function AdminPage() {
               </ul>
             ) : (
               <p className="muted">No live matches.</p>
+            )}
+          </Card>
+          <Card>
+            <h2>Integrity warnings</h2>
+            <p className="muted">
+              Heuristics only. Review the supporting matches or versions before taking action.
+            </p>
+            {data.integrityWarnings.length ? (
+              <ul className="audit-list">
+                {data.integrityWarnings.map((warning) => (
+                  <li key={warning.id}>
+                    <span>
+                      <strong>{warningTitles[warning.kind]}</strong>{' '}
+                      <small className="muted">
+                        {warning.severity} · seen {warning.occurrences}{' '}
+                        {warning.occurrences === 1 ? 'time' : 'times'}
+                      </small>
+                    </span>
+                    <span className="muted">
+                      {JSON.stringify(warning.detail)} · {formatDate(warning.lastSeenAt)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">No integrity warnings.</p>
             )}
           </Card>
           <Card>

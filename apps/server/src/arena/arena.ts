@@ -7,7 +7,10 @@ import {
 } from '@bomberman/bot-sdk';
 import {
   createGame,
+  DIRECTIONS,
+  DIRECTION_DELTAS,
   hashState,
+  isWalkable,
   randomSeed,
   type Snapshot,
   toSnapshot,
@@ -22,6 +25,7 @@ import type {
 import type { FastifyBaseLogger } from 'fastify';
 import type { Server } from 'socket.io';
 import type { AppContext } from '../context.ts';
+import { inspectCompletedMatch } from '../store/integrity.ts';
 import { abortMatch, completeMatch, insertMatch, type NewParticipant } from '../store/matches.ts';
 
 export interface ArenaParticipant {
@@ -187,6 +191,8 @@ export class Arena {
 
     entry.done = (async () => {
       try {
+        const deaths: { playerId: number; killedBy: number | null; escapeAvailable: boolean }[] =
+          [];
         const outcome = await runMatch({
           state,
           controllers,
@@ -194,6 +200,25 @@ export class Arena {
           decisionTimeoutMs: options.decisionTimeoutMs,
           signal: abort.signal,
           onTick: (current, events) => {
+            for (const event of events) {
+              if (event.type !== 'playerDied') continue;
+              const player = current.players[event.playerId];
+              if (!player) continue;
+              const escapeAvailable = DIRECTIONS.some((direction) => {
+                const { dx, dy } = DIRECTION_DELTAS[direction];
+                const x = player.x + dx;
+                const y = player.y + dy;
+                return (
+                  isWalkable(current, x, y) &&
+                  !current.flames.some((flame) => flame.x === x && flame.y === y)
+                );
+              });
+              deaths.push({
+                playerId: event.playerId,
+                killedBy: event.killedBy,
+                escapeAvailable,
+              });
+            }
             const snapshot = toSnapshot(current, events);
             entry.snapshot = snapshot;
             this.io.to(room).emit('match:snapshot', { matchId, snapshot });
@@ -214,8 +239,14 @@ export class Arena {
             result,
             intents: outcome.intents,
             finalHash: hashState(outcome.state),
+            deaths,
           }),
         );
+        if (options.kind === 'ranked') {
+          await inspectCompletedMatch(this.context.db, matchId).catch((error: unknown) =>
+            this.log.error({ matchId, err: error }, 'ranked integrity analysis failed'),
+          );
+        }
         this.io.to(room).emit('match:end', { matchId, result });
         this.log.info(
           {

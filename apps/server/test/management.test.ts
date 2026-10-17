@@ -123,4 +123,36 @@ describe('management and tournaments', () => {
       expect.objectContaining({ slug: 'first-match', title: 'Arena Debut' }),
     ]);
   });
+
+  it('surfaces cross-account source similarity as a moderator warning', async () => {
+    const first = new TestClient(app);
+    await first.register('source_owner_one');
+    const firstBot = await first.request('POST', '/api/bots', { name: 'Original' });
+    await first.request('POST', `/api/bots/${firstBot.body.id}/versions`, {
+      source: SAMPLE_BOTS[2]!.source,
+    });
+
+    const second = new TestClient(app);
+    await second.register('source_owner_two');
+    const secondBot = await second.request('POST', '/api/bots', { name: 'Copy' });
+    await second.request('POST', `/api/bots/${secondBot.body.id}/versions`, {
+      source: `${SAMPLE_BOTS[2]!.source}\n// changed comment`,
+    });
+
+    const overview = await admin.request('GET', '/api/admin');
+    expect(overview.body.counts.integrityWarnings).toBeGreaterThanOrEqual(1);
+    expect(overview.body.integrityWarnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'source_similarity',
+          severity: 'high',
+          detail: expect.objectContaining({
+            similarity: 1,
+            botIds: expect.arrayContaining([firstBot.body.id, secondBot.body.id]),
+          }),
+        }),
+      ]),
+    );
+    expect(JSON.stringify(overview.body.integrityWarnings)).not.toContain('function gameLoop');
+  });
 });

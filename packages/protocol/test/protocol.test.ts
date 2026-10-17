@@ -25,9 +25,9 @@ describe('protocol schemas', () => {
       registerBody.safeParse({ username: 'alice', email: 'alice@example.com', password: 'short' })
         .success,
     ).toBe(false);
-    expect(
-      registerBody.safeParse({ username: 'alice', password: 'longenough' }).success,
-    ).toBe(false);
+    expect(registerBody.safeParse({ username: 'alice', password: 'longenough' }).success).toBe(
+      false,
+    );
     expect(
       registerBody.safeParse({ username: 'alice', email: 'not-an-email', password: 'longenough' })
         .success,

@@ -88,9 +88,15 @@ export async function abortStaleMatches(db: Queryable): Promise<number> {
 export async function completeMatch(
   tx: Queryable,
   id: string,
-  outcome: { result: MatchResult; intents: RecordedIntent[]; finalHash: string },
+  outcome: {
+    result: MatchResult;
+    intents: RecordedIntent[];
+    finalHash: string;
+    deaths?: { playerId: number; killedBy: number | null; escapeAvailable: boolean }[];
+  },
 ): Promise<void> {
-  const { result, intents, finalHash } = outcome;
+  const { result, intents, finalHash, deaths = [] } = outcome;
+  const deathByPlayer = new Map(deaths.map((death) => [death.playerId, death]));
   const { rows } = await tx.query<{
     rated: boolean;
     tournament_id: string | null;
@@ -104,9 +110,10 @@ export async function completeMatch(
   if (!rows[0]) throw new Error(`Match ${id} is not running`);
 
   for (const player of result.players) {
+    const death = deathByPlayer.get(player.playerId);
     await tx.query(
       `update match_participants set placement = $3, score = $4, kills = $5, walls = $6, items = $7,
-         died_at_tick = $8
+         died_at_tick = $8, killed_by_slot = $9, escape_available = $10
        where match_id = $1 and slot = $2`,
       [
         id,
@@ -117,6 +124,8 @@ export async function completeMatch(
         player.stats.wallsDestroyed,
         player.stats.itemsCollected,
         player.diedAtTick,
+        death?.killedBy ?? null,
+        death?.escapeAvailable ?? false,
       ],
     );
   }
