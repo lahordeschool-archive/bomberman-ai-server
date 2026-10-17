@@ -19,6 +19,7 @@ SKINS = {
     "shadow": ((66, 58, 88), (206, 68, 255), "hood"),
     "galaxy": ((54, 52, 148), (255, 120, 224), "stars"),
     "crown": ((230, 164, 26), (255, 242, 110), "crown"),
+    "duck": ((247, 207, 44), (255, 126, 32), "duck"),
 }
 
 PLAYER_TINTS = {
@@ -70,6 +71,18 @@ def decorate(draw, frame, kind, accent):
             fill=accent,
         )
         draw.line([(x + 4, 7), (x + 13, 7)], fill=dark, width=1)
+    elif kind == "duck":
+        pose = frame // 3
+        if pose == 0:  # Back view: a jaunty feather.
+            draw.polygon([(x + 7, 4), (x + 8, 0), (x + 10, 4)], fill=accent)
+        elif pose == 1:  # Facing left.
+            draw.polygon([(x + 5, 8), (x + 1, 10), (x + 5, 12)], fill=accent)
+        elif pose == 2:  # Facing the camera.
+            draw.rectangle((x + 6, 9, x + 11, 11), fill=accent)
+            draw.point((x + 5, 7), fill=(255, 255, 255))
+            draw.point((x + 12, 7), fill=(255, 255, 255))
+        else:  # Facing right.
+            draw.polygon([(x + 12, 8), (x + 16, 10), (x + 12, 12)], fill=accent)
 
 
 def decorate_bomb(draw, frame, kind, base, accent):
@@ -99,6 +112,9 @@ def decorate_bomb(draw, frame, kind, base, accent):
         silver = (220, 228, 236)
         draw.ellipse((x + 6, 7, x + 10, 11), fill=silver, outline=base)
         draw.line([(x + 8, 8), (x + 8, 10)], fill=base)
+    elif kind == "duck":
+        draw.ellipse((x + 5, 6, x + 11, 12), fill=(245, 245, 230), outline=base)
+        draw.rectangle((x + 8, 9, x + 12, 10), fill=accent)
 
 
 def generate_bomb(slug, base, accent, decoration, player_color, player_tint):
@@ -232,6 +248,28 @@ def draw_effect(draw, box, kind, base, accent, phase, orientation):
             shine_x = cx - 1 + (phase % 3)
             draw.line([(shine_x, top + offset + 1), (shine_x, top + offset + 4)], fill=white)
             draw.point((cx, top + offset + 3), fill=dark)
+    elif kind == "duck":  # Duck: a burst of spinning feathers.
+        feather = (255, 248, 198, 255)
+        positions = (
+            (3 + phase, 4),
+            (11 - phase, 8),
+            (5 + (phase % 2) * 4, 12),
+        )
+        for index, (x, y) in enumerate(positions):
+            draw.polygon(
+                [
+                    (left + x, top + y - 3),
+                    (left + x + 3, top + y),
+                    (left + x, top + y + 3),
+                    (left + x - 1, top + y),
+                ],
+                fill=feather if index % 2 == 0 else base,
+                outline=accent,
+            )
+            draw.line(
+                [(left + x, top + y - 2), (left + x, top + y + 2)],
+                fill=accent,
+            )
 
 
 def generate_flame(slug, base, accent, decoration, player_color, player_tint):
