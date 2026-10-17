@@ -1,12 +1,14 @@
 import {
   ARENA_SHRINK_INTERVAL_TICKS,
   ARENA_SHRINK_RINGS,
+  ARENA_SHRINK_WARNING_TICKS,
   ARENA_THEMES,
   ARENA_WIDTHS,
   BOMB_FUSE_TICKS,
   Cell,
   DEFAULT_MAX_TICKS,
   DIRECTION_DELTAS,
+  DIRECTIONS,
   ENGINE_VERSION,
   FLAME_TICKS,
   GRID_HEIGHT,
@@ -26,10 +28,12 @@ import {
   type Direction,
   type ItemType,
 } from './constants.ts';
-import { cellIndex, generateMap, isInside, spawnPoints } from './map.ts';
+import { cellIndex, closingSchedule, generateMap, isInside, spawnPoints } from './map.ts';
 import { normalizeSeed, randomInt } from './rng.ts';
 import type {
   BombState,
+  ClosingTile,
+  ClosingWarning,
   FlameKind,
   GameEvent,
   GameState,
@@ -212,7 +216,8 @@ export function step(state: GameState): GameState {
   }
   for (const player of dying) scatterItems(state, player);
 
-  if (state.engineVersion >= 6) shrinkArenaIfDue(state, events);
+  if (state.engineVersion === 6) shrinkArenaIfDue(state, events);
+  else if (state.engineVersion >= 7) closeDueTiles(state, events);
 
   const alive = state.players.filter((player) => player.alive);
   if (alive.length <= 1) finish(state, 'lastStanding', events);
@@ -278,6 +283,90 @@ function shrinkArenaIfDue(state: GameState, events: GameEvent[]): void {
     }
   }
   events.push({ type: 'arenaShrunk', inset });
+}
+
+/** Tiles closing within the warning window, soonest first. Empty before engine v7. */
+export function closingWarnings(state: GameState): ClosingWarning[] {
+  if (state.engineVersion < 7 || state.status !== 'running') return [];
+  return closingSchedule(state.width, state.height)
+    .filter(
+      (tile) =>
+        tile.tick > state.tick &&
+        tile.tick <= state.tick + ARENA_SHRINK_WARNING_TICKS &&
+        tile.tick <= state.settings.maxTicks &&
+        state.grid[cellIndex(tile.x, tile.y, state.width)] !== Cell.Hard,
+    )
+    .map(({ x, y, tick }) => ({ x, y, ticksLeft: tick - state.tick }));
+}
+
+function closeDueTiles(state: GameState, events: GameEvent[]): void {
+  const nextTick = state.tick + 1;
+  for (const tile of closingSchedule(state.width, state.height)) {
+    if (tile.tick !== nextTick) continue;
+    closeTile(state, tile, events);
+    if (tile.ringEnd) events.push({ type: 'arenaShrunk', inset: tile.inset });
+  }
+}
+
+/**
+ * Turns one tile into a hard wall. Whatever lies on it disappears, and a player
+ * standing there is pushed to a free neighbour (inward first) or crushed.
+ */
+function closeTile(state: GameState, tile: ClosingTile, events: GameEvent[]): void {
+  const { x, y } = tile;
+  const index = cellIndex(x, y, state.width);
+  if (state.grid[index] === Cell.Hard) return;
+  state.grid[index] = Cell.Hard;
+  events.push({ type: 'tileClosed', x, y });
+
+  const here = (entity: { x: number; y: number }) => entity.x === x && entity.y === y;
+  state.bombs = state.bombs.filter((bomb) => !here(bomb));
+  state.flames = state.flames.filter((flame) => !here(flame));
+  state.items = state.items.filter((item) => {
+    if (!here(item)) return true;
+    if (!item.hidden) events.push({ type: 'itemDestroyed', x, y, item: item.type });
+    return false;
+  });
+
+  for (const player of state.players) {
+    if (!player.alive) continue;
+    if (here(player)) {
+      player.move = null;
+      const target = pushTarget(state, tile);
+      if (target) {
+        player.x = target.x;
+        player.y = target.y;
+        events.push({ type: 'playerPushed', playerId: player.id, fromX: x, fromY: y, ...target });
+        collectItem(state, player, events);
+      } else {
+        killPlayer(state, player, null, events);
+        scatterItems(state, player);
+      }
+    } else if (
+      player.move &&
+      ((player.move.fromX === x && player.move.fromY === y) ||
+        (player.move.toX === x && player.move.toY === y))
+    ) {
+      player.move = null;
+    }
+  }
+}
+
+/** A walkable, flame free neighbour, preferring the arena's inside over the closing ring. */
+function pushTarget(state: GameState, tile: ClosingTile): { x: number; y: number } | null {
+  const inside = (x: number, y: number) =>
+    x > tile.inset &&
+    y > tile.inset &&
+    x < state.width - 1 - tile.inset &&
+    y < state.height - 1 - tile.inset;
+  const free = DIRECTIONS.map((direction) => ({
+    x: tile.x + DIRECTION_DELTAS[direction].dx,
+    y: tile.y + DIRECTION_DELTAS[direction].dy,
+  })).filter(
+    ({ x, y }) =>
+      isWalkable(state, x, y) && !state.flames.some((flame) => flame.x === x && flame.y === y),
+  );
+  return free.find(({ x, y }) => inside(x, y)) ?? free[0] ?? null;
 }
 
 function plantBomb(state: GameState, player: PlayerState, events: GameEvent[]): void {

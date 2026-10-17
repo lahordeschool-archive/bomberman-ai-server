@@ -1,4 +1,5 @@
 import {
+  closingWarnings,
   type Direction,
   type GameState,
   type ItemType,
@@ -42,6 +43,11 @@ export interface Observation {
   bombs: { x: number; y: number; ownerId: number; ticksLeft: number; range: number }[];
   flames: { x: number; y: number; ticksLeft: number }[];
   items: { x: number; y: number; type: ItemType }[];
+  /**
+   * Tiles turning into indestructible walls within the next 3 s, soonest first. A
+   * player still on one is pushed to a free neighbour, or crushed when there is none.
+   */
+  closing: { x: number; y: number; ticksLeft: number }[];
 }
 
 export function buildObservation(state: GameState, playerId: number): Observation {
@@ -86,5 +92,6 @@ export function buildObservation(state: GameState, playerId: number): Observatio
     })),
     flames: state.flames.map(({ x, y, ticksLeft }) => ({ x, y, ticksLeft })),
     items: state.items.filter((item) => !item.hidden).map(({ x, y, type }) => ({ x, y, type })),
+    closing: closingWarnings(state),
   };
 }

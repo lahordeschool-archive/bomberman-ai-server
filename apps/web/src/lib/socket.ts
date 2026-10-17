@@ -10,15 +10,16 @@ export function getSocket(): ArenaSocket {
   return socket;
 }
 
-/** Reconnects with fresh cookies after login or logout. */
+/**
+ * Reconnects with fresh cookies after login or logout. The instance stays the same so
+ * listeners survive; they see a disconnect then a connect, and rejoin their rooms.
+ */
 export function resetSocket(): void {
-  if (!socket) return;
-  socket.disconnect();
-  socket = null;
+  socket?.disconnect().connect();
 }
 
 export function emitWithAck<T>(
-  event: 'match:watch' | 'casual:create' | 'casual:join' | 'casual:start',
+  event: 'match:watch' | 'match:chat' | 'casual:create' | 'casual:join' | 'casual:start',
   payload: unknown,
 ): Promise<T> {
   type Response = { ok: true; data: unknown } | { ok: false; error: string };

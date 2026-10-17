@@ -85,7 +85,26 @@ export type GameEvent =
   | { type: 'itemDestroyed'; x: number; y: number; item: ItemType }
   | { type: 'playerDied'; playerId: number; killedBy: number | null }
   | { type: 'arenaShrunk'; inset: number }
+  | { type: 'tileClosed'; x: number; y: number }
+  | { type: 'playerPushed'; playerId: number; fromX: number; fromY: number; x: number; y: number }
   | { type: 'matchEnded'; winnerId: number | null; reason: 'lastStanding' | 'timeout' };
+
+export interface ClosingTile {
+  x: number;
+  y: number;
+  /** Ring the tile belongs to, counted from the border. */
+  inset: number;
+  tick: number;
+  /** The last tile of its ring. */
+  ringEnd: boolean;
+}
+
+/** A tile that turns into a hard wall soon. */
+export interface ClosingWarning {
+  x: number;
+  y: number;
+  ticksLeft: number;
+}
 
 export interface PlayerResult {
   playerId: number;

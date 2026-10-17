@@ -29,9 +29,51 @@ interface Pick {
 }
 
 /**
+ * Selects human-owned entrants for a ranked match.
+ *
+ * The queue is already ordered by waiting time. Its first bot anchors the match;
+ * opponents are the closest-rated bots owned by other players. Queue order breaks
+ * equal rating-distance ties, and no owner can occupy more than one seat. A partial
+ * human lineup waits while another queued bot is busy instead of being padded with
+ * house bots.
+ */
+export function selectRankedEntrants(
+  queue: QueueEntry[],
+  busyBotIds: ReadonlySet<string> = new Set(),
+  maxPlayers = MAX_PLAYERS_PER_MATCH,
+): QueueEntry[] {
+  const anchor = queue[0];
+  if (!anchor || busyBotIds.has(anchor.botId) || maxPlayers <= 0) return [];
+
+  const ownerIds = new Set([anchor.ownerId]);
+  const opponents = queue
+    .slice(1)
+    .filter((entry) => !busyBotIds.has(entry.botId))
+    .map((entry, queueIndex) => ({
+      entry,
+      queueIndex,
+      ratingDistance: Math.abs(entry.rating - anchor.rating),
+    }))
+    .sort((a, b) => a.ratingDistance - b.ratingDistance || a.queueIndex - b.queueIndex);
+  const selected = [anchor];
+  if (selected.length >= maxPlayers) return selected;
+  for (const { entry } of opponents) {
+    if (ownerIds.has(entry.ownerId)) continue;
+    selected.push(entry);
+    ownerIds.add(entry.ownerId);
+    if (selected.length >= maxPlayers) break;
+  }
+  if (selected.length < maxPlayers && queue.some((entry) => busyBotIds.has(entry.botId))) {
+    return [];
+  }
+  return selected;
+}
+
+/**
  * Builds ranked matches from the queue: the bot that waited longest is matched with
- * the closest rated queued bots, and randomly drawn house bots fill the remaining seats. Every bot
- * runs inside the isolated runner; only these server completed matches are rated.
+ * the closest rated queued bots from distinct owners, and randomly drawn house bots
+ * fill the remaining seats. Every bot runs inside the isolated runner; only these
+ * server completed matches are rated.
  */
 export class Matchmaker {
   private readonly context: AppContext;
@@ -106,11 +148,11 @@ export class Matchmaker {
         started.push(matchId);
         continue;
       }
-      const queue = (await listQueue(this.context.db, 200)).filter(
-        (entry) => !busy.has(entry.botId),
-      );
+      const queue = await listQueue(this.context.db, 200);
       if (queue.length === 0) break;
-      const matchId = await this.startMatch(this.pick(queue), 'ranked');
+      const entrants = selectRankedEntrants(queue, busy);
+      if (entrants.length === 0) break;
+      const matchId = await this.startMatch(this.pick(entrants), 'ranked');
       if (!matchId) break;
       started.push(matchId);
     }
@@ -144,11 +186,7 @@ export class Matchmaker {
   }
 
   private pick(queue: QueueEntry[]): Pick[] {
-    const [anchor, ...rest] = queue;
-    const opponents = rest
-      .sort((a, b) => Math.abs(a.rating - anchor!.rating) - Math.abs(b.rating - anchor!.rating))
-      .slice(0, MAX_PLAYERS_PER_MATCH - 1);
-    const picks: Pick[] = [anchor!, ...opponents].map((entry) => ({
+    const picks: Pick[] = queue.map((entry) => ({
       botId: entry.botId,
       versionId: entry.versionId,
       name: entry.botName,

@@ -15,6 +15,11 @@ import { useSession } from '../lib/session.tsx';
 
 const PAGE = 25;
 
+function formatWinRate(wins: number, games: number): string {
+  if (games <= 0) return '—';
+  return `${Math.round((wins / games) * 100)}%`;
+}
+
 export function LeaderboardPage() {
   const { user } = useSession();
   const [entries, setEntries] = useState<LeaderboardEntry[] | null>(null);
@@ -63,6 +68,7 @@ export function LeaderboardPage() {
                     <th scope="col">Rating</th>
                     <th scope="col">Games</th>
                     <th scope="col">Wins</th>
+                    <th scope="col">Win %</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -77,7 +83,14 @@ export function LeaderboardPage() {
                           <strong>{entry.botName}</strong>
                         </Link>
                         <small className="mobile-table-meta">
-                          {entry.games} games · {entry.wins} wins
+                          by{' '}
+                          {entry.owner.isHouse ? (
+                            'House'
+                          ) : (
+                            <Link to={`/u/${entry.owner.username}`}>{entry.owner.displayName}</Link>
+                          )}{' '}
+                          · {entry.games} games · {entry.wins} wins ·{' '}
+                          {formatWinRate(entry.wins, entry.games)}
                         </small>
                       </td>
                       <td>
@@ -90,6 +103,7 @@ export function LeaderboardPage() {
                       <td className="mono">{formatRating(entry.rating)}</td>
                       <td className="mono">{entry.games}</td>
                       <td className="mono">{entry.wins}</td>
+                      <td className="mono">{formatWinRate(entry.wins, entry.games)}</td>
                     </tr>
                   ))}
                 </tbody>

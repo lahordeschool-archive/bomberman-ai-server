@@ -2,13 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   applyIntent,
   ARENA_SHRINK_INTERVAL_TICKS,
+  ARENA_SHRINK_TILE_TICKS,
+  ARENA_SHRINK_WARNING_TICKS,
   ARENA_THEMES,
   ARENA_WIDTHS,
   BOMB_FUSE_TICKS,
   Cell,
   cellIndex,
+  closingSchedule,
+  closingWarnings,
   createGame,
   FLAME_TICKS,
+  type GameState,
+  ringCells,
   MAX_FLAME_RANGE,
   maxSpeed,
   moveDurationTicks,
@@ -305,9 +311,9 @@ describe('timeouts and scoring', () => {
   });
 });
 
-describe('arena shrinking', () => {
+describe('arena shrinking (engine v6)', () => {
   it('closes one hard-wall ring at each of the first two minutes', () => {
-    const state = emptyArena(3);
+    const state = emptyArena(3, {}, 6);
     state.players[0]!.x = 2;
     state.players[0]!.y = 3;
     state.players[1]!.x = 4;
@@ -327,7 +333,7 @@ describe('arena shrinking', () => {
   });
 
   it('crushes players and clears entities covered by a closing ring', () => {
-    const state = emptyArena(3);
+    const state = emptyArena(3, {}, 6);
     const crushed = state.players[0]!;
     crushed.x = 1;
     crushed.y = 3;
@@ -369,6 +375,94 @@ describe('arena shrinking', () => {
 
     expect(state.grid).toEqual(before);
     expect(state.events).not.toContainEqual({ type: 'arenaShrunk', inset: 1 });
+  });
+});
+
+describe('arena shrinking', () => {
+  const START = ARENA_SHRINK_INTERVAL_TICKS;
+  /** Players away from the outer rings, so only the ones a test moves get caught. */
+  const arena = () => {
+    const state = emptyArena(3);
+    state.players.forEach((player, id) => {
+      player.x = 3 + 2 * id;
+      player.y = 5;
+    });
+    return state;
+  };
+  const tileAt = (state: GameState, x: number, y: number) =>
+    closingSchedule(state.width, state.height).find((tile) => tile.x === x && tile.y === y)!;
+
+  it('warns about each tile three seconds before it closes', () => {
+    const state = arena();
+    state.tick = START - ARENA_SHRINK_WARNING_TICKS - 1;
+    expect(closingWarnings(state)).toEqual([]);
+    state.tick++;
+    expect(closingWarnings(state)).toEqual([{ x: 1, y: 1, ticksLeft: ARENA_SHRINK_WARNING_TICKS }]);
+    expect(toSnapshot(state).closing).toEqual(closingWarnings(state));
+    expect(closingWarnings(emptyArena(2, {}, 6))).toEqual([]);
+  });
+
+  it('closes the ring tile by tile, clockwise from the top left corner', () => {
+    const state = arena();
+    state.items.push({ x: 2, y: 1, type: 'extraBomb', hidden: false });
+    state.tick = START - 1;
+
+    step(state);
+    expect(state.grid[cellIndex(1, 1, state.width)]).toBe(Cell.Hard);
+    expect(state.grid[cellIndex(2, 1, state.width)]).toBe(Cell.Floor);
+    expect(state.events).toContainEqual({ type: 'tileClosed', x: 1, y: 1 });
+
+    stepN(state, ARENA_SHRINK_TILE_TICKS, step);
+    expect(state.grid[cellIndex(2, 1, state.width)]).toBe(Cell.Hard);
+    expect(state.items).toHaveLength(0);
+    expect(state.events).toContainEqual({ type: 'itemDestroyed', x: 2, y: 1, item: 'extraBomb' });
+
+    const ring = ringCells(1, state.width, state.height);
+    stepN(state, (ring.length - 2) * ARENA_SHRINK_TILE_TICKS, step);
+    expect(state.events).toContainEqual({ type: 'arenaShrunk', inset: 1 });
+    for (const { x, y } of ring) expect(state.grid[cellIndex(x, y, state.width)]).toBe(Cell.Hard);
+    expect(state.grid[cellIndex(3, 3, state.width)]).toBe(Cell.Floor);
+    expect(state.players.every((player) => player.alive)).toBe(true);
+  });
+
+  it('pushes a player caught on a closing tile inward', () => {
+    const state = arena();
+    const player = state.players[0]!;
+    player.x = 3;
+    player.y = 1;
+    state.tick = tileAt(state, 3, 1).tick - 1;
+
+    step(state);
+
+    expect(player).toMatchObject({ alive: true, x: 3, y: 2, move: null });
+    expect(state.events).toContainEqual({
+      type: 'playerPushed',
+      playerId: 0,
+      fromX: 3,
+      fromY: 1,
+      x: 3,
+      y: 2,
+    });
+  });
+
+  it('pushes along the ring when the inside is blocked, and crushes a boxed in player', () => {
+    const state = arena();
+    const swept = state.players[0]!;
+    swept.x = 2;
+    swept.y = 1;
+    // The last tile of the ring: the corner and the tile below are closed, a pillar is inside.
+    const boxed = state.players[1]!;
+    boxed.x = 1;
+    boxed.y = 2;
+    state.tick = START - 1;
+
+    stepN(state, tileAt(state, 2, 1).tick - START + 1, step);
+    expect(swept).toMatchObject({ alive: true, x: 3, y: 1 });
+
+    const closesBoxed = tileAt(state, 1, 2).tick;
+    stepN(state, closesBoxed - state.tick, step);
+    expect(state.tick).toBe(closesBoxed);
+    expect(boxed).toMatchObject({ alive: false, killedBy: null, diedAtTick: closesBoxed - 1 });
   });
 });
 

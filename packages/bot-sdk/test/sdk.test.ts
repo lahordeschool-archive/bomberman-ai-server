@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ARENA_SHRINK_INTERVAL_TICKS,
+  closingSchedule,
   createGame,
+  type GameState,
   hashState,
+  type PlayerState,
   runReplay,
   step,
   turnTicks,
@@ -10,15 +12,23 @@ import {
 import {
   botSeed,
   buildObservation,
+  extractChat,
   getSampleBot,
+  MAX_CHAT_LENGTH,
   type Observation,
   parseAction,
+  sanitizeChat,
   randomSampleBots,
   runMatch,
   SAMPLE_BOTS,
   STARTER_SOURCE,
 } from '../src/index.ts';
 import { createVmController } from './vm-controller.ts';
+
+const crushedByArena = (state: GameState, player: PlayerState) =>
+  closingSchedule(state.width, state.height).some(
+    (tile) => tile.tick === player.diedAtTick! + 1 && tile.x === player.x && tile.y === player.y,
+  );
 
 describe('parseAction', () => {
   it.each([
@@ -37,8 +47,41 @@ describe('parseAction', () => {
     [{ type: 'teleport' }, { type: 'idle' }],
     [42, { type: 'idle' }],
     [null, { type: 'idle' }],
+    ['SAY move up now', { type: 'idle' }],
+    ['chat bomb', { type: 'idle' }],
+    [{ type: 'say', message: 'hello' }, { type: 'idle' }],
+    [
+      { type: 'move', direction: 'left', say: 'brb' },
+      { type: 'move', direction: 'left' },
+    ],
+    [{ type: 'bomb', say: 'boom' }, { type: 'bomb' }],
   ])('parses %j', (raw, expected) => {
     expect(parseAction(raw)).toEqual(expected);
+  });
+});
+
+describe('extractChat', () => {
+  it.each([
+    ['SAY hello there', 'hello there'],
+    ['  chat   gg  wp ', 'gg wp'],
+    [{ type: 'say', message: 'hi' }, 'hi'],
+    [{ type: 'chat', message: 'yo' }, 'yo'],
+    [{ type: 'move', direction: 'up', say: 'running' }, 'running'],
+    [{ type: 'bomb', say: 'fire\u0000in\nthe hole' }, 'fire in the hole'],
+    ['MOVE UP', null],
+    ['SAY', null],
+    ['SAY    ', null],
+    [{ type: 'say' }, null],
+    [{ type: 'bomb', message: 'not chat' }, null],
+    [null, null],
+    [42, null],
+  ])('reads %j', (raw, expected) => {
+    expect(extractChat(raw)).toBe(expected);
+  });
+
+  it('caps messages at MAX_CHAT_LENGTH', () => {
+    expect(extractChat(`SAY ${'x'.repeat(500)}`)).toHaveLength(MAX_CHAT_LENGTH);
+    expect(sanitizeChat('a'.repeat(MAX_CHAT_LENGTH + 1))).toHaveLength(MAX_CHAT_LENGTH);
   });
 });
 
@@ -188,9 +231,9 @@ describe('sample bots and match loop', () => {
       });
       if (state.result!.winnerId === 0) bomberWins++;
       const player = state.players[0]!;
-      const arenaCrush =
-        player.diedAtTick !== null && (player.diedAtTick + 1) % ARENA_SHRINK_INTERVAL_TICKS === 0;
-      if (!player.alive && player.killedBy === null && !arenaCrush) bomberSelfKills++;
+      if (!player.alive && player.killedBy === null && !crushedByArena(state, player)) {
+        bomberSelfKills++;
+      }
     }
     expect(bomberSelfKills).toBeLessThanOrEqual(1);
     expect(bomberWins).toBeGreaterThanOrEqual(4);
@@ -215,9 +258,9 @@ describe('sample bots and match loop', () => {
         const entry = games.get(bot.slug)!;
         entry.played++;
         const player = state.players[id]!;
-        const arenaCrush =
-          player.diedAtTick !== null && (player.diedAtTick + 1) % ARENA_SHRINK_INTERVAL_TICKS === 0;
-        if (!player.alive && player.killedBy === null && !arenaCrush) entry.self++;
+        if (!player.alive && player.killedBy === null && !crushedByArena(state, player)) {
+          entry.self++;
+        }
         entry.bombs += intents.filter((i) => i.playerId === id && i.intent.type === 'bomb').length;
       });
     }
@@ -275,6 +318,22 @@ describe('sample bots and match loop', () => {
     for (const intent of intents) {
       expect(intent.tick % 5).toBeGreaterThan(0);
     }
+  });
+
+  it('reports every in-time answer, including idle chat-only ones', async () => {
+    const state = createGame({ seed: 1, playerCount: 2, settings: { maxTicks: 30 } });
+    const chatty = { decide: async () => 'SAY hello' };
+    const raws: unknown[] = [];
+    const { intents } = await runMatch({
+      state,
+      controllers: [chatty, null],
+      tickMs: 0,
+      decisionTimeoutMs: 50,
+      onRawDecision: (playerId, raw) => raws.push([playerId, raw]),
+    });
+    expect(intents).toHaveLength(0);
+    expect(raws.length).toBeGreaterThan(0);
+    expect(raws.every((entry) => JSON.stringify(entry) === '[0,"SAY hello"]')).toBe(true);
   });
 
   it('drops late decisions and stops when aborted', async () => {

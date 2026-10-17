@@ -1,4 +1,7 @@
 import {
+  ARENA_SHRINK_INTERVAL_TICKS,
+  ARENA_SHRINK_RINGS,
+  ARENA_SHRINK_TILE_TICKS,
   Cell,
   GRID_HEIGHT,
   GRID_WIDTH,
@@ -7,7 +10,7 @@ import {
   SOFT_WALL_DENSITY,
 } from './constants.ts';
 import { nextRandom, randomInt } from './rng.ts';
-import type { ItemState } from './types.ts';
+import type { ClosingTile, ItemState } from './types.ts';
 
 export function cellIndex(x: number, y: number, width = GRID_WIDTH): number {
   return y * width + x;
@@ -43,6 +46,46 @@ export function safeCells(width = GRID_WIDTH, height = GRID_HEIGHT): { x: number
     { x: x === 1 ? x + 1 : x - 1, y },
     { x, y: y === 1 ? y + 1 : y - 1 },
   ]);
+}
+
+/** The cells of the ring `inset` tiles in from the border, clockwise from its top left. */
+export function ringCells(inset: number, width = GRID_WIDTH, height = GRID_HEIGHT) {
+  const left = inset;
+  const right = width - 1 - inset;
+  const top = inset;
+  const bottom = height - 1 - inset;
+  const cells: { x: number; y: number }[] = [];
+  for (let x = left; x <= right; x++) cells.push({ x, y: top });
+  for (let y = top + 1; y <= bottom; y++) cells.push({ x: right, y });
+  for (let x = right - 1; x >= left; x--) cells.push({ x, y: bottom });
+  for (let y = bottom - 1; y > top; y--) cells.push({ x: left, y });
+  return cells;
+}
+
+const schedules = new Map<string, readonly ClosingTile[]>();
+
+/**
+ * Engine v7 closing order: ring `n` starts closing at `n` minutes, one tile every
+ * `ARENA_SHRINK_TILE_TICKS`. `tick` is the state tick right after the tile closes.
+ */
+export function closingSchedule(width = GRID_WIDTH, height = GRID_HEIGHT): readonly ClosingTile[] {
+  const key = `${width}x${height}`;
+  let schedule = schedules.get(key);
+  if (!schedule) {
+    schedule = Array.from({ length: ARENA_SHRINK_RINGS }, (_, ring) => {
+      const inset = ring + 1;
+      const cells = ringCells(inset, width, height);
+      return cells.map(({ x, y }, order) => ({
+        x,
+        y,
+        inset,
+        tick: inset * ARENA_SHRINK_INTERVAL_TICKS + order * ARENA_SHRINK_TILE_TICKS,
+        ringEnd: order === cells.length - 1,
+      }));
+    }).flat();
+    schedules.set(key, schedule);
+  }
+  return schedule;
 }
 
 export function generateMap(

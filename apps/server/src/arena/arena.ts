@@ -1,4 +1,10 @@
-import { type BotController, runMatch, SDK_VERSION } from '@bomberman/bot-sdk';
+import {
+  type BotController,
+  extractChat,
+  runMatch,
+  sanitizeChat,
+  SDK_VERSION,
+} from '@bomberman/bot-sdk';
 import {
   createGame,
   hashState,
@@ -6,7 +12,13 @@ import {
   type Snapshot,
   toSnapshot,
 } from '@bomberman/game-engine';
-import type { MatchInit, MatchParticipantInfo, ServerToClientEvents } from '@bomberman/protocol';
+import type {
+  ChatAuthor,
+  ChatMessage,
+  MatchInit,
+  MatchParticipantInfo,
+  ServerToClientEvents,
+} from '@bomberman/protocol';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Server } from 'socket.io';
 import type { AppContext } from '../context.ts';
@@ -24,7 +36,20 @@ interface LiveMatch {
   abort: AbortController;
   botIds: string[];
   done: Promise<void>;
+  chat: ChatMessage[];
+  nextChatId: number;
+  /** Last accepted message time per sender (`user:<id>` or `bot:<slot>`). */
+  lastChatAt: Map<string, number>;
 }
+
+/** Each bot and each spectator may post at most one line per interval. */
+export const CHAT_INTERVAL_MS = 1000;
+const CHAT_HISTORY = 100;
+/** Spectators keep talking through the result and the wait for the next match. */
+export const CHAT_GRACE_MS = 2 * 60_000;
+
+export type ChatOutcome =
+  { ok: true; message: ChatMessage } | { ok: false; reason: 'not-live' | 'too-fast' | 'empty' };
 
 export interface StartOptions {
   kind: 'ranked' | 'casual' | 'tournament';
@@ -50,6 +75,8 @@ export class Arena {
   private readonly io: Server<Record<string, never>, ServerToClientEvents>;
   private readonly log: FastifyBaseLogger;
   private readonly live = new Map<string, LiveMatch>();
+  /** Finished matches whose chat is still open, for `CHAT_GRACE_MS`. */
+  private readonly ended = new Map<string, LiveMatch>();
 
   constructor(context: AppContext, io: Server, log: FastifyBaseLogger) {
     this.context = context;
@@ -76,7 +103,25 @@ export class Arena {
   /** The init payload with the latest snapshot, for spectators joining mid match. */
   watch(matchId: string): MatchInit | null {
     const match = this.live.get(matchId);
-    return match ? { ...match.init, snapshot: match.snapshot } : null;
+    return match ? { ...match.init, snapshot: match.snapshot, chat: [...match.chat] } : null;
+  }
+
+  /** Posts a line to the chat of a live or just finished match, and broadcasts it to its room. */
+  chat(matchId: string, sender: string, from: ChatAuthor, text: unknown): ChatOutcome {
+    const match = this.live.get(matchId) ?? this.ended.get(matchId);
+    if (!match) return { ok: false, reason: 'not-live' };
+    const clean = sanitizeChat(text);
+    if (!clean) return { ok: false, reason: 'empty' };
+    const now = Date.now();
+    const last = match.lastChatAt.get(sender);
+    if (last !== undefined && now - last < CHAT_INTERVAL_MS)
+      return { ok: false, reason: 'too-fast' };
+    match.lastChatAt.set(sender, now);
+    const message: ChatMessage = { id: match.nextChatId++, matchId, at: now, from, text: clean };
+    match.chat.push(message);
+    if (match.chat.length > CHAT_HISTORY) match.chat.splice(0, match.chat.length - CHAT_HISTORY);
+    this.io.to(matchRoom(matchId)).emit('match:chat', message);
+    return { ok: true, message };
   }
 
   async start(options: StartOptions): Promise<{ matchId: string; done: Promise<void> }> {
@@ -114,6 +159,7 @@ export class Arena {
       })),
       maxTicks: state.settings.maxTicks,
       snapshot: toSnapshot(state, []),
+      chat: [],
     };
     const abort = new AbortController();
     const room = matchRoom(matchId);
@@ -127,6 +173,9 @@ export class Arena {
           : [],
       ),
       done: Promise.resolve(),
+      chat: [],
+      nextChatId: 1,
+      lastChatAt: new Map(),
     };
     this.live.set(matchId, entry);
     options.beforeRun?.(init);
@@ -148,6 +197,12 @@ export class Arena {
             const snapshot = toSnapshot(current, events);
             entry.snapshot = snapshot;
             this.io.to(room).emit('match:snapshot', { matchId, snapshot });
+          },
+          onRawDecision: (slot, raw) => {
+            const text = extractChat(raw);
+            const participant = init.participants[slot];
+            if (!text || !participant) return;
+            this.chat(matchId, `bot:${slot}`, { kind: 'bot', name: participant.name, slot }, text);
           },
           onDecisionError: (slot, error) => {
             this.log.debug({ matchId, slot, err: String(error) }, 'decision dropped');
@@ -178,6 +233,8 @@ export class Arena {
       } finally {
         await Promise.allSettled(controllers.map((controller) => controller?.dispose?.()));
         this.live.delete(matchId);
+        this.ended.set(matchId, entry);
+        setTimeout(() => this.ended.delete(matchId), CHAT_GRACE_MS).unref();
         options.onFinished?.(matchId);
       }
     })();

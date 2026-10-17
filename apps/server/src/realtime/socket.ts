@@ -1,5 +1,5 @@
 import type { Server as HttpServer } from 'node:http';
-import { watchMatchPayload, type Ack } from '@bomberman/protocol';
+import { chatSendPayload, watchMatchPayload, type Ack } from '@bomberman/protocol';
 import type { FastifyBaseLogger } from 'fastify';
 import { ZodError } from 'zod';
 import { type Arena, matchRoom } from '../arena/arena.ts';
@@ -9,6 +9,8 @@ import { sessionCookieName } from '../http/session-plugin.ts';
 import { CasualRooms, type GameServer, type GameSocket, UserError } from './casual.ts';
 
 const EVENTS_PER_SECOND = 20;
+const VIEWERS_DEBOUNCE_MS = 250;
+const MATCH_ROOM_PREFIX = matchRoom('');
 
 function readCookie(header: string | undefined, name: string): string | null {
   if (!header) return null;
@@ -57,6 +59,25 @@ export function createRealtime(
       callback(null, !origin || allowed.has(origin));
     },
   });
+
+  /** Viewer counts go out once per burst of joins and leaves, not once per socket. */
+  const pendingViewers = new Map<string, ReturnType<typeof setTimeout>>();
+  const countViewers = (room: string) => {
+    if (!room.startsWith(MATCH_ROOM_PREFIX) || pendingViewers.has(room)) return;
+    const timer = setTimeout(() => {
+      pendingViewers.delete(room);
+      const viewers = io.of('/').adapter.rooms.get(room)?.size ?? 0;
+      if (viewers === 0) return;
+      io.to(room).emit('match:viewers', {
+        matchId: room.slice(MATCH_ROOM_PREFIX.length),
+        viewers,
+      });
+    }, VIEWERS_DEBOUNCE_MS);
+    timer.unref();
+    pendingViewers.set(room, timer);
+  };
+  io.of('/').adapter.on('join-room', countViewers);
+  io.of('/').adapter.on('leave-room', countViewers);
 
   io.use((socket, next) => {
     const token = readCookie(socket.request.headers.cookie, cookieName);
@@ -114,6 +135,30 @@ export function createRealtime(
       const parsed = watchMatchPayload.safeParse(payload);
       if (parsed.success) void socket.leave(matchRoom(parsed.data.matchId));
     });
+    socket.on('match:chat', (payload, ack) =>
+      handle(ack, () => {
+        const user = socket.data.user;
+        if (!user) throw new UserError('Sign in to chat.');
+        const { matchId, text } = chatSendPayload.parse(payload);
+        if (!socket.rooms.has(matchRoom(matchId))) {
+          throw new UserError('Watch the match to chat.');
+        }
+        const outcome = arena.chat(
+          matchId,
+          `user:${user.id}`,
+          { kind: 'user', name: user.displayName, username: user.username },
+          text,
+        );
+        if (outcome.ok) return outcome.message;
+        throw new UserError(
+          outcome.reason === 'too-fast'
+            ? 'One message per second, please.'
+            : outcome.reason === 'empty'
+              ? 'Type a message first.'
+              : 'The chat of that match is closed.',
+        );
+      }),
+    );
     socket.on('casual:create', (payload, ack) => handle(ack, () => rooms.create(socket, payload)));
     socket.on('casual:join', (payload, ack) => handle(ack, () => rooms.join(socket, payload)));
     socket.on('casual:start', (payload, ack) => handle(ack, () => rooms.start(socket, payload)));

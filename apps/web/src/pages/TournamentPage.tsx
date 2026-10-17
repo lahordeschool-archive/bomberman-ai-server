@@ -85,7 +85,7 @@ export default function TournamentPage({ slug }: { slug: string }) {
             </div>
           ) : (
             <p className="muted">
-              Save a version first. <Link to="/">Open your dashboard</Link>
+              Save a version first. <Link to="/bots">Open your bots</Link>
             </p>
           )}
         </Card>

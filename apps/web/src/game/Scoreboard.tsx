@@ -1,19 +1,14 @@
-import { PLAYER_COLORS, type Snapshot, TICK_MS } from '@bomberman/game-engine';
-import type { MatchSummary } from '@bomberman/protocol';
+import { type Snapshot, TICK_MS } from '@bomberman/game-engine';
+import type { MatchSummary, SkinSlug } from '@bomberman/protocol';
 import { Bomb, Fire, Lightning, Skull } from '@phosphor-icons/react';
+import { assignPlayerColors } from './player-colors.ts';
 
 export interface ScoreboardEntry {
   slot: number;
   name: string;
   detail?: string | null;
+  skin?: SkinSlug | null;
 }
-
-const SWATCHES: Record<(typeof PLAYER_COLORS)[number], string> = {
-  white: '#E8E8E8',
-  black: '#5B5B5B',
-  blue: '#4D8DF7',
-  red: '#F25555',
-};
 
 export function entriesFromSummary(summary: MatchSummary): ScoreboardEntry[] {
   return summary.participants.map((participant) => ({
@@ -22,6 +17,7 @@ export function entriesFromSummary(summary: MatchSummary): ScoreboardEntry[] {
       ? `${participant.botName} v${participant.botVersion}`
       : participant.botName,
     detail: participant.owner?.isHouse ? 'House bot' : participant.owner?.displayName,
+    skin: participant.skin,
   }));
 }
 
@@ -49,6 +45,7 @@ export function Scoreboard({
         : mode === 'idle'
           ? 'Ready'
           : 'Live';
+  const colors = assignPlayerColors(entries);
   return (
     <div className="scoreboard">
       <div className="scoreboard-header">
@@ -61,10 +58,9 @@ export function Scoreboard({
         {entries.map((entry) => {
           const player = snapshot?.players[entry.slot];
           const placement = snapshot?.result?.players[entry.slot]?.placement;
-          const color = PLAYER_COLORS[entry.slot % PLAYER_COLORS.length]!;
           return (
             <li key={entry.slot} className={player && !player.alive ? 'is-dead' : undefined}>
-              <span className="swatch" style={{ background: SWATCHES[color] }} aria-hidden />
+              <span className="swatch" style={{ background: colors.get(entry.slot) }} aria-hidden />
               <span className="scoreboard-name">
                 <strong>{entry.name}</strong>
                 {entry.detail ? <small>{entry.detail}</small> : null}

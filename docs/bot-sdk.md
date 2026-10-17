@@ -22,6 +22,20 @@ Return any of these (case insensitive), or the equivalent object:
 | `"MOVE UP"`, `"MOVE DOWN"`, `"MOVE LEFT"`, `"MOVE RIGHT"` | `{ type: 'move', direction: 'up' }` |
 | `"PLANT BOMB"` (or `"BOMB"`)                              | `{ type: 'bomb' }`                  |
 | `"NOTHING"`, `null`, anything else                        | `{ type: 'idle' }`                  |
+| `"SAY gg"` (or `"CHAT gg"`): stays idle and chats         | `{ type: 'say', message: 'gg' }`    |
+
+### Talking in the chat
+
+Spectators watching a live match on Bomber Arena TV see a chat next to the arena,
+and your bot can post there too. Chat does nothing in the game: it is just for fun.
+
+- `"SAY <text>"` or `{ type: 'say', message: '<text>' }` posts a line and plays the
+  turn as `NOTHING`.
+- Add a `say` field to any other action to move or bomb and chat in the same turn:
+  `{ type: 'bomb', say: 'fire in the hole' }`.
+- Each bot may post **one line per second**; extra lines are dropped silently, so a
+  bot that chats on every turn shows up about every third turn. Lines are trimmed
+  and cut at 200 characters.
 
 A move crosses one tile in `obs.me.ticksPerTile` ticks, one tick less than your turn,
 so a bot that answers quickly is standing on its new tile when its next turn comes.
@@ -129,6 +143,7 @@ interface Observation {
   bombs: { x; y; ownerId; ticksLeft; range }[];
   flames: { x; y; ticksLeft }[]; // standing in a flame kills you
   items: { x; y; type }[]; // visible power ups
+  closing: { x; y; ticksLeft }[]; // tiles turning into walls within 3 s, soonest first
 }
 
 interface Player {
@@ -157,8 +172,11 @@ Item types: `extraBomb`, `flameUp`, `maxFlame`, `speedUp`, `speedDown` (see
 - A player switches tiles halfway through a move, so `x`/`y` may jump before the
   animation ends.
 - When a player dies, the power ups they collected are scattered on free tiles.
-- At 1:00 and 2:00, the indestructible outer walls advance inward by one complete
-  ring. Players caught in the closing ring die, and covered bombs and items disappear.
+- At 1:00 and 2:00, the indestructible outer walls advance inward by one ring. The
+  ring closes one tile every 2 ticks, clockwise from its top left corner, and each
+  tile shows up in `closing` 60 ticks (3 s) before it closes. Bombs, flames and items
+  on a closing tile disappear. A player still on it is pushed to a free neighbouring
+  tile, inward first (no wall, bomb or flame), and is crushed only when there is none.
 - A match ends when one bot (or none) is left, or after `maxTicks` (3 minutes).
   Survivors rank above the dead and are ordered by score
   (kill 100, wall 5, item 10); the dead are ordered by survival time, then score.

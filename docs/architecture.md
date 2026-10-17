@@ -38,8 +38,8 @@ version, change ratings.
 - Accepted intents are recorded as `(tick, slot, intent)` with the tick they were
   applied at, and stored in `match_events`.
 - `runReplay(seed, settings, intents)` re-simulates a match exactly; the stored
-  `final_hash` (FNV-1a over the state) lets anyone verify a replay. The match page
-  re-simulates in the browser and shows whether the hash matches.
+  `final_hash` (FNV-1a over the state) lets anyone verify a replay. Bomber Arena TV
+  re-simulates replays in the browser and shows whether the hash matches.
 - A shared harness (`BOT_HARNESS`) gives both bot runtimes the same semantics: seeded
   `Math.random`, `Date`/`performance.now()` frozen to the game tick, captured
   console, and the same `fetch`. Bots can still depend on timing and outside
@@ -95,9 +95,14 @@ body, and a 256 KB response. `BOT_FETCH=off` disables network access entirely.
 - **Arena** (`apps/server/src/arena`): runs matches in real time, streams snapshots to
   the `match:<id>` Socket.IO room, then stores the outcome, the replay log, and rating
   changes in one transaction. Matches interrupted by a restart are marked aborted.
-- **Matchmaker**: the queued bot that waited longest is matched with the closest rated
-  queued bots; house bots (the public samples) fill empty seats. Concurrency is
-  capped by `RANKED_CONCURRENCY`.
+- **Matchmaker**: the queued bot that waited longest anchors the match. Up to three
+  opponents are chosen by smallest absolute rating gap, with queue order breaking
+  ties, and a player can occupy only one seat per ranked match. If that global anchor
+  is still playing, matchmaking waits instead of rematching newer available bots;
+  it also waits rather than filling a partial human lineup while other queued bots
+  are busy. This prevents concurrent matches from becoming permanent cohorts. House
+  bots (the public samples) fill empty seats only when no running queued bot could
+  complete the lineup. Concurrency is capped by `RANKED_CONCURRENCY`.
 - **Ratings**: multiplayer Elo. Each match is scored as every pairwise duel
   (K = 32 scaled by 1 / (n − 1)); ties share points. `npm run ratings:rebuild`
   recomputes everything from stored placements.
@@ -124,7 +129,12 @@ PostgreSQL advisory lock (or with `npm run db:migrate`).
 
 Socket.IO 4 on `/socket.io`, same origin only. Anonymous sockets may watch; playing
 online needs a session cookie. Events are typed in `packages/protocol/src/realtime.ts`:
-`match:watch`, `match:snapshot`, `match:end`, `casual:create|join|start|leave`,
-`casual:lobby`, `casual:match`, and `bot:observe` (server asks a browser for a move).
+`match:watch`, `match:snapshot`, `match:end`, `match:chat`, `match:viewers`,
+`casual:create|join|start|leave`, `casual:lobby`, `casual:match`, and `bot:observe`
+(server asks a browser for a move). `match:viewers` counts the sockets in a match room.
+Match chat is in memory only and lives as long as the match plus two minutes, so
+spectators can talk through the result: signed-in spectators in the match room and the
+match's bots (`SAY …` actions) may each post one line per second; `match:watch` returns
+the last 100 lines. Bomber Arena TV keeps the last 100 lines across matches.
 The original 2020 protocol and the rule changes since are documented in
 [legacy-protocol.md](legacy-protocol.md).

@@ -146,7 +146,20 @@ small {
 }
 .nav-links {
   display: flex;
+  align-items: center;
   gap: var(--space-1);
+}
+/* Splits the site sections from the account links. */
+.nav-separator {
+  width: 1px;
+  height: 20px;
+  margin: 0 var(--space-2);
+  background: var(--surface-4);
+}
+.mobile-menu .nav-separator {
+  width: 100%;
+  height: 1px;
+  margin: var(--space-2) 0;
 }
 .nav-links a,
 .mobile-menu a {
@@ -194,7 +207,10 @@ small {
   font-size: 14px;
   line-height: 20px;
 }
-.footer span {
+.footer-copy {
+  max-width: 640px;
+}
+.footer-links {
   display: flex;
   gap: var(--space-4);
 }
@@ -253,6 +269,10 @@ small {
   }
   .card {
     min-width: 0;
+    padding: var(--space-4);
+  }
+  .footer {
+    flex-direction: column;
     padding: var(--space-4);
   }
 }
@@ -433,6 +453,7 @@ small {
 }
 .inline-form .field {
   flex: 1;
+  min-width: 0;
   margin-bottom: 0;
 }
 .toolbar {
@@ -576,7 +597,8 @@ small {
   transition: background 300ms var(--ease);
 }
 a.bot-row:hover,
-a.match-row:hover {
+a.match-row:hover,
+button.match-row:hover {
   background: var(--surface-3);
   color: var(--text);
 }
@@ -585,18 +607,60 @@ a.match-row:hover {
   flex-direction: column;
 }
 .bot-row-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   color: var(--muted);
   font-size: 14px;
   line-height: 20px;
+}
+.bot-row-meta .badge {
+  margin-left: 0;
 }
 .match-row {
   align-items: flex-start;
   flex-direction: column;
   gap: var(--space-1);
 }
+button.match-row {
+  width: 100%;
+  border: 1px solid transparent;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 300ms var(--ease),
+    border-color 300ms var(--ease);
+}
+button.match-row[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: rgb(255 138 61 / 0.08);
+}
 .match-row-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
   font-size: 12px;
   line-height: 16px;
+}
+.match-row-kind {
+  color: var(--muted);
+}
+.match-row-kind::before {
+  content: '·';
+  margin-right: var(--space-2);
+}
+.match-row-on-tv {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  color: var(--accent-strong);
+  font-weight: 600;
 }
 .match-row-head .badge {
   margin-left: 0;
@@ -669,44 +733,52 @@ a.match-row:hover {
 }
 
 @media (max-width: 600px) {
-  .leaderboard,
-  .match-result {
+  .bot-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .bot-row > span:first-child {
+    width: 100%;
+  }
+  .bot-row-meta {
+    justify-content: flex-start;
+  }
+  .inline-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .inline-form .button {
+    width: 100%;
+  }
+  .leaderboard {
     table-layout: fixed;
   }
   .leaderboard th,
-  .leaderboard td,
-  .match-result th,
-  .match-result td {
+  .leaderboard td {
     padding-inline: var(--space-2);
   }
   .leaderboard th:nth-child(1) {
     width: 42px;
   }
   .leaderboard th:nth-child(4) {
-    width: 60px;
+    width: 64px;
   }
+  .leaderboard th:nth-child(3),
   .leaderboard th:nth-child(5),
   .leaderboard th:nth-child(6),
+  .leaderboard th:nth-child(7),
+  .leaderboard td:nth-child(3),
   .leaderboard td:nth-child(5),
   .leaderboard td:nth-child(6),
-  .match-result th:nth-child(3),
-  .match-result th:nth-child(4),
-  .match-result td:nth-child(3),
-  .match-result td:nth-child(4) {
+  .leaderboard td:nth-child(7) {
     display: none;
   }
-  .leaderboard a,
-  .match-result a {
+  .leaderboard a {
     overflow-wrap: anywhere;
   }
   .leaderboard .badge {
     margin-left: 0;
-  }
-  .match-result th:nth-child(1) {
-    width: 50px;
-  }
-  .match-result th:nth-child(5) {
-    width: 86px;
   }
   .mobile-table-meta {
     display: block;
@@ -1304,9 +1376,6 @@ a.match-row:hover {
   margin-top: 0;
 }
 
-.skin-store {
-  margin-bottom: var(--space-5);
-}
 .coin-balance {
   display: inline-flex;
   flex: none;
@@ -1322,9 +1391,6 @@ a.match-row:hover {
   gap: var(--space-3);
   margin-top: var(--space-4);
 }
-.skin-grid-compact {
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-}
 .skin-card {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
@@ -1338,22 +1404,16 @@ a.match-row:hover {
   color: var(--text);
   text-align: left;
 }
+.skin-card.is-selected {
+  border-color: var(--accent);
+  background: var(--surface-4);
+}
 .skin-card > div:not(.skin-preview) {
   display: grid;
   min-width: 0;
 }
 .skin-card > .button {
   grid-column: 1 / -1;
-}
-.skin-choice {
-  grid-template-columns: 56px minmax(0, 1fr);
-  font: inherit;
-  cursor: pointer;
-}
-.skin-choice:hover,
-.skin-choice.is-selected {
-  border-color: var(--accent);
-  background: var(--surface-4);
 }
 .skin-preview {
   width: 51px;
@@ -1390,36 +1450,541 @@ a.match-row:hover {
   }
 }
 
-/* Match */
-.match-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr);
-  gap: var(--space-4);
-  align-items: start;
+/* Bomber Arena TV */
+.tv {
+  margin-bottom: var(--space-6);
+  animation: rise 700ms var(--ease) both;
 }
-.replay-controls {
+.tv-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-3);
-  margin-top: var(--space-3);
+  min-height: 40px;
+  margin-bottom: var(--space-3);
+}
+.tv-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 28px;
+  line-height: 36px;
+  letter-spacing: -0.01em;
+}
+.tv-title svg {
+  color: var(--accent);
+}
+.tv-title span {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+/* Status pill in the top left corner of the screen: blinks while a match is on air. */
+.tv-status {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.tv-status-pill,
+.tv-status-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.tv-status-pill {
+  background: rgb(0 0 0 / 0.6);
+  color: var(--muted);
+}
+.tv-status-kind {
+  background: rgb(0 0 0 / 0.45);
+  color: var(--text);
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.tv-status-kind.is-verified svg {
+  color: var(--success);
+}
+.tv-status-kind.is-mismatch {
+  color: var(--danger);
+}
+.tv-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: currentColor;
+}
+.tv-status.is-live .tv-status-pill {
+  background: #e5332a;
+  color: #fff;
+  animation: on-air-glow 1600ms var(--ease) infinite;
+}
+.tv-status.is-live .tv-status-dot {
+  animation: on-air-blink 1000ms steps(1) infinite;
+}
+.tv-status.is-replay .tv-status-pill {
+  background: rgb(86 204 242 / 0.9);
+  color: #0b0b08;
+}
+@keyframes on-air-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes on-air-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgb(229 51 42 / 0.7);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 10px rgb(229 51 42 / 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tv-status.is-live .tv-status-pill,
+  .tv-status.is-live .tv-status-dot {
+    animation: none;
+  }
+}
+/*
+ * The stage (16:9 screen + scoreboard) sets the row height; the chat takes no height of
+ * its own and matches it. The width cap keeps the whole stage inside the first viewport.
+ */
+.tv-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: var(--space-4);
+  max-width: max(760px, calc((100vh - 400px) * 16 / 9 + 356px));
+}
+.tv-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.tv-screen {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgb(255 138 61 / 0.12), transparent 60%),
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.015) 0 2px, transparent 2px 4px), #0b0b08;
+}
+/* The board is letterboxed inside the fixed frame, whatever the map size. */
+.tv-arena {
+  position: absolute;
+  inset: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tv-arena .arena-canvas {
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+}
+/* Dim the board without opacity on the canvas — that breaks Firefox WebGL compositing
+   (black on screen, fine in screenshots). */
+.tv-arena.is-idle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.65);
+  pointer-events: none;
+  transition: opacity 700ms var(--ease);
+}
+.tv-arena .arena-sound {
+  top: 0;
+  right: 0;
+}
+.tv-standby {
+  text-align: center;
+}
+.tv-standby p {
+  margin: 0;
+}
+.tv-standby-title {
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 600;
+}
+.tv-info .scoreboard {
+  min-height: 144px;
+}
+.tv-info .scoreboard-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--space-5);
+}
+.tv-info .scoreboard-list li {
+  padding: var(--space-1) 0;
+}
+.tv-header-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.tv-header-meta .badge {
+  margin-left: 0;
+}
+
+.tv-chat {
+  position: relative;
+  min-height: 0;
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-2xl);
+  background: var(--surface);
+}
+.tv-chat-inner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tv-chat-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--surface-3);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.tv-chat-header svg {
+  color: var(--accent);
+  font-size: 16px;
+}
+.tv-chat-viewers {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  color: var(--text);
+  font-family: var(--mono);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.tv-chat-viewers svg {
+  color: #ff6b62;
+  font-size: 14px;
+}
+.tv-chat-list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--space-2) 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.tv-chat-empty {
+  padding: var(--space-4);
+  font-size: 14px;
+  line-height: 20px;
+}
+.tv-chat-system {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+  padding: 0 var(--space-4);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+  animation: chat-in 300ms var(--ease) both;
+}
+.tv-chat-system::before,
+.tv-chat-system::after {
+  content: '';
+  flex: 1;
+  min-width: var(--space-4);
+  height: 1px;
+  background: var(--surface-3);
+}
+.tv-chat-fold {
+  display: flex;
+  justify-content: center;
+  margin: var(--space-2) 0 0;
+  padding: 0 var(--space-4);
+}
+.tv-chat-fold button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-3);
+  border: 1px solid var(--surface-3);
+  border-radius: 9999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+  transition:
+    color 300ms var(--ease),
+    border-color 300ms var(--ease);
+}
+.tv-chat-fold button:hover {
+  border-color: var(--surface-4);
+  color: var(--text);
+}
+.tv-chat-system span {
+  max-width: 80%;
+}
+.tv-chat-line {
+  padding: var(--space-1) var(--space-4);
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  animation: chat-in 300ms var(--ease) both;
+}
+.tv-chat-line:hover {
+  background: var(--surface-2);
+}
+.tv-chat-line.is-me {
+  background: rgb(255 138 61 / 0.06);
+}
+.tv-chat-line time {
+  margin-right: var(--space-2);
+  color: var(--muted);
+  font-size: 11px;
+}
+.tv-chat-line strong {
+  font-weight: 600;
+}
+.tv-chat-line strong::after {
+  content: ':';
+  margin-right: var(--space-1);
+  color: var(--muted);
+}
+.tv-chat-bot {
+  margin-right: 2px;
+  color: var(--muted);
+  vertical-align: -2px;
+}
+.tv-chat-line.is-bot .tv-chat-text {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+@keyframes chat-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.tv-chat-form {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-top: 1px solid var(--surface-3);
+}
+.tv-chat-form input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--surface-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  transition: border-color 300ms var(--ease);
+}
+.tv-chat-form input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.tv-chat-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 18px;
+  cursor: pointer;
+  transition:
+    background 300ms var(--ease),
+    opacity 300ms var(--ease);
+}
+.tv-chat-send:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+.tv-chat-send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tv-chat-error {
+  margin: 0;
+  padding: 0 var(--space-3) var(--space-3);
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* Replay controls over the bottom of the screen; they fade out while playing. */
+.replay-controls {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-7) var(--space-4) var(--space-3);
+  background: linear-gradient(to top, rgb(0 0 0 / 0.85), rgb(0 0 0 / 0.5) 55%, transparent);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 20px;
+  opacity: 0;
+  transition: opacity 300ms var(--ease);
+}
+.tv-screen:hover .replay-controls,
+.replay-controls:focus-within,
+.replay-controls.is-paused {
+  opacity: 1;
+}
+@media (hover: none) {
+  .replay-controls {
+    opacity: 1;
+  }
 }
 .replay-controls input[type='range'] {
   flex: 1;
   accent-color: var(--accent);
 }
-.verify {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
+.replay-controls select {
+  padding: var(--space-1) var(--space-2);
+  border-color: rgb(255 255 255 / 0.2);
+  background: rgb(0 0 0 / 0.5);
+  font-size: 13px;
+}
+.replay-toggle {
+  flex: none;
+  background: rgb(255 255 255 / 0.12);
+  color: var(--text);
+}
+.replay-toggle:hover {
+  background: rgb(255 255 255 / 0.22);
+}
+
+/* Embedded on the landing page: the screen and scoreboard only, in the hero column. */
+.tv.is-embed {
+  margin-bottom: 0;
+}
+.tv.is-embed .tv-title {
+  font-size: 20px;
+  line-height: 28px;
+}
+.tv.is-embed .tv-body {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: none;
+}
+.tv.is-embed .tv-info .scoreboard-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Guide under the TV: live matches on top, finished ones below, in one block. */
+.match-guide section + section {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--surface-3);
+}
+.match-guide .match-list {
+  margin-bottom: 0;
+}
+.match-guide-count {
+  margin-left: var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  background: rgb(229 51 42 / 0.15);
+  color: #ff6b62;
+  font-family: var(--mono);
+  font-size: 14px;
+  vertical-align: 2px;
+}
+.match-guide-empty {
   margin: 0;
+  padding: var(--space-3);
   font-size: 14px;
   line-height: 20px;
 }
-.verify.ok {
-  color: var(--success);
+
+@media (max-width: 900px) {
+  .tv-body {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: none;
+  }
+  .tv-header {
+    flex-wrap: wrap;
+  }
+  .tv-chat {
+    height: 360px;
+  }
 }
-.verify.bad {
-  color: var(--danger);
+
+@media (max-width: 600px) {
+  .tv-info .scoreboard-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tv-screen .match-end {
+    width: 100%;
+    max-width: none;
+    gap: var(--space-1);
+    padding: var(--space-3);
+  }
+  .tv-screen .match-end-title {
+    font-size: 24px;
+    line-height: 28px;
+  }
+  .tv-screen .match-end-winner {
+    font-size: 16px;
+    line-height: 20px;
+  }
+  .tv-screen .match-end-actions {
+    flex-wrap: nowrap;
+    width: 100%;
+    gap: var(--space-1);
+    margin-top: var(--space-1);
+  }
+  .tv-screen .match-end-actions .button {
+    flex: 1;
+    min-width: 0;
+    padding-inline: var(--space-2);
+    font-size: 14px;
+  }
 }
 
 /* Tournaments, achievements, and operations */
@@ -1492,9 +2057,6 @@ a.match-row:hover {
   color: var(--danger);
 }
 @media (max-width: 900px) {
-  .match-layout {
-    grid-template-columns: 1fr;
-  }
   .form-grid {
     grid-template-columns: 1fr;
   }
