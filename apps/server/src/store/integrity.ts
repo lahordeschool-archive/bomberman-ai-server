@@ -77,6 +77,14 @@ function pairFingerprint(kind: IntegrityWarningKind, left: string, right: string
   return `${kind}:${createHash('sha256').update(pair).digest('hex')}`;
 }
 
+function directedFingerprint(
+  kind: Exclude<IntegrityWarningKind, 'source_similarity'>,
+  subject: string,
+  counterpart: string,
+): string {
+  return `${kind}:${createHash('sha256').update(`${subject}:${counterpart}`).digest('hex')}`;
+}
+
 /** Compares a submitted version with active versions owned by other accounts. */
 export async function inspectSourceSimilarity(
   db: Queryable,
@@ -183,7 +191,7 @@ async function inspectWinAssociations(db: Queryable, matchId: string): Promise<v
       if (withRate < 0.75 || withRate - withoutRate < ASSOCIATION_RATE_GAP) continue;
       await upsertWarning(db, {
         kind: 'win_association',
-        fingerprint: pairFingerprint('win_association', subject.bot_id, candidate.bot_id),
+        fingerprint: directedFingerprint('win_association', subject.bot_id, candidate.bot_id),
         severity: withRate - withoutRate >= 0.75 ? 'high' : 'medium',
         detail: {
           subjectBotId: subject.bot_id,
@@ -242,7 +250,7 @@ async function inspectRepeatedDeaths(db: Queryable, matchId: string): Promise<vo
     if (history.rows.length < REPEATED_DEATH_THRESHOLD) continue;
     await upsertWarning(db, {
       kind: 'repeated_avoidable_death',
-      fingerprint: pairFingerprint(
+      fingerprint: directedFingerprint(
         'repeated_avoidable_death',
         pair.victim_bot_id,
         pair.killer_bot_id,
