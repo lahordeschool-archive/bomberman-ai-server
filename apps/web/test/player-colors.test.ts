@@ -30,6 +30,16 @@ describe('player indicator colors', () => {
     expect(colors.get(0)).toBe('#5B5B5B');
   });
 
+  it('lets Duck keep yellow when paired with Crown', () => {
+    const colors = assignPlayerColors([
+      { slot: 0, skin: 'crown' },
+      { slot: 1, skin: 'duck' },
+    ]);
+
+    expect(colors.get(1)).toBe('#F7CF2C');
+    expect(colors.get(0)).toBe('#E8E8E8');
+  });
+
   it('uses slot order as the stable tie-breaker for identical skins', () => {
     const colors = assignPlayerColors([
       { slot: 3, skin: 'royal' },
