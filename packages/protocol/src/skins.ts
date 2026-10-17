@@ -24,6 +24,12 @@ export const SKINS = [
   { slug: 'shadow', name: 'Shadow', description: 'A stealth hood and sharp eyes.', price: 2400 },
   { slug: 'galaxy', name: 'Galaxy', description: 'A tiny moving constellation.', price: 3300 },
   { slug: 'crown', name: 'Crown', description: 'The ultimate golden arena look.', price: 4500 },
+  {
+    slug: 'duck',
+    name: 'Duck',
+    description: 'The rarest bird in the arena. Quack.',
+    price: 6500,
+  },
 ] as const satisfies readonly SkinDefinition[];
 
 export type SkinSlug = (typeof SKINS)[number]['slug'];
