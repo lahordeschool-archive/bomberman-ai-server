@@ -26,6 +26,7 @@ const SKIN_COLORS: Record<SkinSlug, ColorChoice> = {
   shadow: { family: 'black', swatch: '#665A80' },
   galaxy: { family: 'purple', swatch: '#5654C8' },
   crown: { family: 'yellow', swatch: '#E6A41A' },
+  duck: { family: 'yellow', swatch: '#F7CF2C' },
 };
 
 const CLASSIC_COLOR: ColorChoice = { family: 'white', swatch: '#E8E8E8' };
