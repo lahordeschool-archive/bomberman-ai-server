@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../../context.ts';
 import { iso } from '../../db/rows.ts';
+import { listIntegrityWarnings } from '../../store/integrity.ts';
 import { getMatchSummary, listMatches } from '../../store/matches.ts';
 import { cancelTournament, createTournament, getTournament } from '../../store/tournaments.ts';
 import {
@@ -27,13 +28,20 @@ export function registerAdminRoutes(app: FastifyInstance, context: AppContext): 
 
   app.get('/api/admin', async (request): Promise<AdminOverview> => {
     requireRole(request, 'moderator');
-    const [counts, users, audit, live] = await Promise.all([
-      db.query<{ users: number; bots: number; live_matches: number; tournaments: number }>(
+    const [counts, users, audit, live, warnings] = await Promise.all([
+      db.query<{
+        users: number;
+        bots: number;
+        live_matches: number;
+        tournaments: number;
+        integrity_warnings: number;
+      }>(
         `select
           (select count(*)::int from users where not is_house) as users,
           (select count(*)::int from bots where deleted_at is null) as bots,
           (select count(*)::int from matches where status = 'running') as live_matches,
-          (select count(*)::int from tournaments) as tournaments`,
+          (select count(*)::int from tournaments) as tournaments,
+          (select count(*)::int from integrity_warnings) as integrity_warnings`,
       ),
       db.query<UserRow>(
         'select * from users where not is_house order by created_at desc limit 100',
@@ -50,14 +58,22 @@ export function registerAdminRoutes(app: FastifyInstance, context: AppContext): 
          order by a.created_at desc limit 50`,
       ),
       listMatches(db, { status: 'running', limit: 50, offset: 0 }),
+      listIntegrityWarnings(db),
     ]);
-    const count = counts.rows[0] ?? { users: 0, bots: 0, live_matches: 0, tournaments: 0 };
+    const count = counts.rows[0] ?? {
+      users: 0,
+      bots: 0,
+      live_matches: 0,
+      tournaments: 0,
+      integrity_warnings: 0,
+    };
     return {
       counts: {
         users: count.users,
         bots: count.bots,
         liveMatches: count.live_matches,
         tournaments: count.tournaments,
+        integrityWarnings: count.integrity_warnings,
       },
       users: users.rows.map((row) => toPublicUser(row, { includeEmail: true })),
       audit: audit.rows.map((row) => ({
@@ -68,6 +84,11 @@ export function registerAdminRoutes(app: FastifyInstance, context: AppContext): 
         createdAt: iso(row.created_at),
       })),
       liveMatches: live.matches,
+      integrityWarnings: warnings.map((warning) => ({
+        ...warning,
+        firstSeenAt: iso(warning.firstSeenAt),
+        lastSeenAt: iso(warning.lastSeenAt),
+      })),
     };
   });
 

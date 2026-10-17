@@ -273,7 +273,13 @@ export const updateRoleBody = z.object({
 });
 
 export interface AdminOverview {
-  counts: { users: number; bots: number; liveMatches: number; tournaments: number };
+  counts: {
+    users: number;
+    bots: number;
+    liveMatches: number;
+    tournaments: number;
+    integrityWarnings: number;
+  };
   users: PublicUser[];
   audit: {
     id: string;
@@ -283,6 +289,15 @@ export interface AdminOverview {
     createdAt: string;
   }[];
   liveMatches: MatchSummary[];
+  integrityWarnings: {
+    id: string;
+    kind: 'source_similarity' | 'win_association' | 'repeated_avoidable_death';
+    severity: 'medium' | 'high';
+    detail: Record<string, unknown>;
+    occurrences: number;
+    firstSeenAt: string;
+    lastSeenAt: string;
+  }[];
 }
 
 export interface ApiError {

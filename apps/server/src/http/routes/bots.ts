@@ -26,6 +26,7 @@ import {
   renameBot,
   toVersionDetail,
 } from '../../store/bots.ts';
+import { inspectSourceSimilarity } from '../../store/integrity.ts';
 import { listMatches } from '../../store/matches.ts';
 import { recordAudit } from '../../store/users.ts';
 import { ownsSkin, setBotSkin } from '../../store/skins.ts';
@@ -165,6 +166,14 @@ export function registerBotRoutes(app: FastifyInstance, context: AppContext): vo
         return saved;
       });
       if (ranked) context.nudgeMatchmaker?.();
+      await inspectSourceSimilarity(db, {
+        botId: bot.id,
+        versionId: version.id,
+        ownerId: session.user.id,
+        source,
+      }).catch((error: unknown) =>
+        request.log.error({ botId: bot.id, err: error }, 'source integrity analysis failed'),
+      );
       await recordAudit(db, {
         userId: session.user.id,
         action: 'bot_version_submitted',
