@@ -309,7 +309,9 @@ describe('bots and versions', () => {
       source: SAMPLE_BOTS[1]!.source,
       ranked: true,
     });
-    expect(submittedAndRanked.status).toBe(403);
+    expect(submittedAndRanked.status).toBe(201);
+    expect(submittedAndRanked.body.version).toBe(2);
+    expect((await smoke.request('GET', '/api/bots')).body.bots[0].queued).toBe(false);
 
     const account = await context.db.query<{ ranked_eligible: boolean }>(
       'select ranked_eligible from users where id = $1',

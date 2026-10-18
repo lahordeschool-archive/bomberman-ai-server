@@ -152,13 +152,6 @@ export function registerBotRoutes(app: FastifyInstance, context: AppContext): vo
     async (request, reply) => {
       const { session, bot } = await ownedBot(request);
       const { source, visibility, label, ranked } = submitVersionBody.parse(request.body);
-      if (ranked && !session.user.ranked_eligible) {
-        throw new HttpError(
-          403,
-          'ranked_disabled',
-          'This account is not eligible for ranked play.',
-        );
-      }
       const validation = await context.executor.validate(source);
       if (!validation.ok) {
         throw new HttpError(
@@ -169,10 +162,10 @@ export function registerBotRoutes(app: FastifyInstance, context: AppContext): vo
       }
       const version = await db.transaction(async (tx) => {
         const saved = await addVersion(tx, bot.id, source, visibility, label);
-        if (ranked) await enqueueBot(tx, bot.id);
+        if (ranked && session.user.ranked_eligible) await enqueueBot(tx, bot.id);
         return saved;
       });
-      if (ranked) context.nudgeMatchmaker?.();
+      if (ranked && session.user.ranked_eligible) context.nudgeMatchmaker?.();
       await inspectSourceSimilarity(db, {
         botId: bot.id,
         versionId: version.id,
