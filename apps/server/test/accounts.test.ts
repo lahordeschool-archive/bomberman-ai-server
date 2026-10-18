@@ -331,6 +331,8 @@ describe('bots and versions', () => {
     expect(leaderboard.body.entries.map((entry: { botId: string }) => entry.botId)).not.toContain(
       bot.body.id,
     );
+    await context.db.query('delete from ranked_queue where bot_id = $1', [bot.body.id]);
+    await context.db.query('update ratings set games = 0 where bot_id = $1', [bot.body.id]);
   });
 
   it('lists a public profile', async () => {
