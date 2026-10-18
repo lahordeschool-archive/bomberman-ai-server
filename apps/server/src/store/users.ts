@@ -2,6 +2,8 @@ import type { PublicUser, UserRole } from '@bomberman/protocol';
 import type { Queryable } from '../db/database.ts';
 import { iso } from '../db/rows.ts';
 
+export const DEPLOY_CHECK_USERNAME = 'deploycheck';
+
 export interface UserRow {
   id: string;
   username: string;
@@ -9,6 +11,7 @@ export interface UserRow {
   email: string | null;
   password_hash: string;
   is_house: boolean;
+  ranked_eligible: boolean;
   role: UserRole;
   created_at: Date;
 }
@@ -32,12 +35,21 @@ export async function createUser(
     email: string;
     passwordHash: string;
     isHouse?: boolean;
+    rankedEligible?: boolean;
   },
 ): Promise<UserRow> {
   const { rows } = await db.query<UserRow>(
-    `insert into users (username, display_name, email, password_hash, is_house)
-     values ($1, $2, $3, $4, $5) returning *`,
-    [input.username, input.displayName, input.email, input.passwordHash, input.isHouse ?? false],
+    `insert into users
+       (username, display_name, email, password_hash, is_house, ranked_eligible)
+     values ($1, $2, $3, $4, $5, $6) returning *`,
+    [
+      input.username,
+      input.displayName,
+      input.email,
+      input.passwordHash,
+      input.isHouse ?? false,
+      input.rankedEligible ?? true,
+    ],
   );
   return rows[0]!;
 }

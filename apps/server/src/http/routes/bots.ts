@@ -152,6 +152,13 @@ export function registerBotRoutes(app: FastifyInstance, context: AppContext): vo
     async (request, reply) => {
       const { session, bot } = await ownedBot(request);
       const { source, visibility, label, ranked } = submitVersionBody.parse(request.body);
+      if (ranked && !session.user.ranked_eligible) {
+        throw new HttpError(
+          403,
+          'ranked_disabled',
+          'This account is not eligible for ranked play.',
+        );
+      }
       const validation = await context.executor.validate(source);
       if (!validation.ok) {
         throw new HttpError(
@@ -186,7 +193,10 @@ export function registerBotRoutes(app: FastifyInstance, context: AppContext): vo
   );
 
   app.post('/api/bots/:id/ranked', async (request) => {
-    const { bot } = await ownedBot(request);
+    const { session, bot } = await ownedBot(request);
+    if (!session.user.ranked_eligible) {
+      throw new HttpError(403, 'ranked_disabled', 'This account is not eligible for ranked play.');
+    }
     if (!bot.activeVersion) {
       throw new HttpError(
         409,

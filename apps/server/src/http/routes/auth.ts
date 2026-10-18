@@ -11,6 +11,7 @@ import type { AppContext } from '../../context.ts';
 import { isUniqueViolation } from '../../db/rows.ts';
 import {
   createUser,
+  DEPLOY_CHECK_USERNAME,
   findUserByUsername,
   recordAudit,
   toPublicUser,
@@ -71,6 +72,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: AppContext): v
           displayName: body.displayName ?? body.username,
           email: body.email,
           passwordHash: await hashPassword(body.password),
+          rankedEligible: body.username !== DEPLOY_CHECK_USERNAME,
         });
       } catch (error) {
         if (isUniqueViolation(error)) {
