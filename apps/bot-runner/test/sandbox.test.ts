@@ -4,7 +4,9 @@ import {
   botSeed,
   type BotController,
   buildObservation,
+  extractChat,
   getSampleBot,
+  MAX_CHAT_LENGTH,
   runMatch,
 } from '@bomberman/bot-sdk';
 import { createGame, hashState } from '@bomberman/game-engine';
@@ -24,6 +26,36 @@ describe('QuickJS sandbox', () => {
     const result = await bot.act(observation);
     expect(result).toMatchObject({ action: 'MOVE RIGHT', error: null, timedOut: false });
     expect(result.logs).toEqual([{ level: 'log', message: 'me 1' }]);
+    bot.dispose();
+  });
+
+  it('preserves chat fields and long chat strings through the harness', async () => {
+    const bot = await QuickJsBot.create(
+      `let turn = 0;
+       function gameLoop() {
+         turn++;
+         if (turn === 1) return { type: 'bomb', say: 'x' };
+         if (turn === 2) return { type: 'move', direction: 'up', say: 'on my way' };
+         if (turn === 3) return { type: 'say', message: 'hello' };
+         return 'SAY ' + 'z'.repeat(500);
+       }`,
+      1,
+    );
+
+    const bomb = (await bot.act(observation)).action;
+    expect(bomb).toMatchObject({ type: 'bomb', say: 'x' });
+    expect(extractChat(bomb)).toBe('x');
+
+    const move = (await bot.act(observation)).action;
+    expect(move).toMatchObject({ type: 'move', direction: 'up', say: 'on my way' });
+    expect(extractChat(move)).toBe('on my way');
+
+    const say = (await bot.act(observation)).action;
+    expect(say).toMatchObject({ type: 'say', message: 'hello' });
+    expect(extractChat(say)).toBe('hello');
+
+    const longSay = (await bot.act(observation)).action;
+    expect(extractChat(longSay)).toBe('z'.repeat(MAX_CHAT_LENGTH));
     bot.dispose();
   });
 

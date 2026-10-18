@@ -72,11 +72,13 @@ export const BOT_HARNESS = String.raw`(function () {
     return String(error);
   }
   function normalize(value) {
-    if (typeof value === 'string') return value.slice(0, 64);
+    if (typeof value === 'string') return value.slice(0, 256);
     if (value && typeof value === 'object') {
       return {
         type: typeof value.type === 'string' ? value.type.slice(0, 16) : null,
         direction: typeof value.direction === 'string' ? value.direction.slice(0, 16) : null,
+        say: typeof value.say === 'string' ? value.say.slice(0, 256) : null,
+        message: typeof value.message === 'string' ? value.message.slice(0, 256) : null,
       };
     }
     return null;
