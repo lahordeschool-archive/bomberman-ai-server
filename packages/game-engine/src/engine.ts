@@ -471,6 +471,7 @@ const ARMS: { direction: Direction; body: FlameKind; end: FlameKind }[] = [
 function detonate(state: GameState, initial: number[], events: GameEvent[]): void {
   const queue = [...initial];
   const destroyedWalls = new Set<number>();
+  const litThisTick = new Set<number>();
   while (queue.length > 0) {
     const bombId = queue.shift()!;
     const bombIndex = state.bombs.findIndex((bomb) => bomb.id === bombId);
@@ -483,7 +484,7 @@ function detonate(state: GameState, initial: number[], events: GameEvent[]): voi
       x: bomb!.x,
       y: bomb!.y,
     });
-    putFlame(state, bomb!.x, bomb!.y, bomb!.ownerId, 'center');
+    putFlame(state, bomb!.x, bomb!.y, bomb!.ownerId, 'center', litThisTick);
 
     for (const arm of ARMS) {
       const { dx, dy } = DIRECTION_DELTAS[arm.direction];
@@ -511,7 +512,14 @@ function detonate(state: GameState, initial: number[], events: GameEvent[]): voi
           events.push({ type: 'itemDestroyed', x, y, item: item!.type });
           break;
         }
-        putFlame(state, x, y, bomb!.ownerId, distance === bomb!.range ? arm.end : arm.body);
+        putFlame(
+          state,
+          x,
+          y,
+          bomb!.ownerId,
+          distance === bomb!.range ? arm.end : arm.body,
+          litThisTick,
+        );
         const chained = state.bombs.find((other) => other.x === x && other.y === y);
         if (chained && !queue.includes(chained.id)) queue.push(chained.id);
       }
@@ -524,11 +532,21 @@ function detonate(state: GameState, initial: number[], events: GameEvent[]): voi
   }
 }
 
-function putFlame(state: GameState, x: number, y: number, ownerId: number, kind: FlameKind): void {
+function putFlame(
+  state: GameState,
+  x: number,
+  y: number,
+  ownerId: number,
+  kind: FlameKind,
+  litThisTick: Set<number>,
+): void {
+  const index = cellIndex(x, y, state.width);
+  const keepOwner = state.engineVersion >= 8 && litThisTick.has(index);
+  litThisTick.add(index);
   const existing = state.flames.find((flame) => flame.x === x && flame.y === y);
   if (existing) {
     existing.ticksLeft = FLAME_TICKS;
-    existing.ownerId = ownerId;
+    if (!keepOwner) existing.ownerId = ownerId;
     if (existing.kind !== 'center') existing.kind = kind;
     return;
   }
