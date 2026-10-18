@@ -6,10 +6,11 @@
  * v5: v4 plus seeded arena width and scene variations.
  * v6: v5 plus hard-wall arena shrinking after each of the first two minutes.
  * v7: rings close tile by tile after a warning, pushing caught players inward.
+ * v8: the first blast to reach a cell in a tick keeps its kill attribution.
  */
-export const ENGINE_VERSION = 7;
+export const ENGINE_VERSION = 8;
 /** Versions `runReplay` can still re-simulate. */
-export const SUPPORTED_ENGINE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
+export const SUPPORTED_ENGINE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8];
 
 export const TICK_MS = 50;
 export const GRID_WIDTH = 15;

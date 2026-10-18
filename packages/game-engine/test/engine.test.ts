@@ -182,6 +182,57 @@ describe('bombs and flames', () => {
     expect(state.result!.players.map((player) => player.placement)).toEqual([1, 2]);
   });
 
+  it('credits a chain kill to the first blast that reaches the victim in engine v8', () => {
+    const state = emptyArena(4);
+    state.players[0]!.x = 9;
+    state.players[0]!.y = 9;
+    state.players[1]!.x = 4;
+    state.players[1]!.y = 3;
+    state.players[2]!.x = 9;
+    state.players[2]!.y = 11;
+    state.bombs.push({ id: 53, ownerId: 2, x: 3, y: 3, fuse: 1, range: 2 });
+    state.bombs.push({ id: 54, ownerId: 0, x: 5, y: 3, fuse: 8, range: 3 });
+
+    step(state);
+
+    expect(state.bombs).toHaveLength(0);
+    expect(state.players[1]!.killedBy).toBe(2);
+    expect(state.players[2]!.stats.kills).toBe(1);
+    expect(state.players[0]!.stats.kills).toBe(0);
+    expect(state.flames.find((flame) => flame.x === 3 && flame.y === 3)!.ownerId).toBe(2);
+    expect(state.flames.find((flame) => flame.x === 7 && flame.y === 3)!.ownerId).toBe(0);
+  });
+
+  it('keeps the legacy last-blast attribution for engine v7 replays', () => {
+    const state = emptyArena(4, {}, 7);
+    state.players[0]!.x = 9;
+    state.players[0]!.y = 9;
+    state.players[1]!.x = 4;
+    state.players[1]!.y = 3;
+    state.players[2]!.x = 9;
+    state.players[2]!.y = 11;
+    state.bombs.push({ id: 53, ownerId: 2, x: 3, y: 3, fuse: 1, range: 2 });
+    state.bombs.push({ id: 54, ownerId: 0, x: 5, y: 3, fuse: 8, range: 3 });
+
+    step(state);
+
+    expect(state.players[1]!.killedBy).toBe(0);
+  });
+
+  it('lets a new blast take over a flame lingering from an earlier tick in engine v8', () => {
+    const state = emptyArena(2);
+    state.players[0]!.x = 1;
+    state.players[0]!.y = 9;
+    state.players[1]!.x = 13;
+    state.players[1]!.y = 9;
+    state.flames.push({ x: 4, y: 1, ownerId: 0, kind: 'horizontal', ticksLeft: 5 });
+    state.bombs.push({ id: 9, ownerId: 1, x: 5, y: 1, fuse: 1, range: 1 });
+
+    step(state);
+
+    expect(state.flames.find((flame) => flame.x === 4 && flame.y === 1)!.ownerId).toBe(1);
+  });
+
   it('records a draw when everyone dies together under engine v3', () => {
     const state = createGame({ seed: 1, playerCount: 2, engineVersion: 3 });
     state.grid = state.grid.map((cell) => (cell === Cell.Soft ? Cell.Floor : cell));
