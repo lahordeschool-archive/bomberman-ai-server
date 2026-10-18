@@ -292,6 +292,51 @@ describe('bots and versions', () => {
     await owner.request('DELETE', `/api/bots/${bot.body.id}/ranked`);
   });
 
+  it('keeps the deployment smoke account out of ranked play and the leaderboard', async () => {
+    const smoke = new TestClient(app);
+    const user = await smoke.register('deploycheck');
+    const bot = await smoke.request('POST', '/api/bots', { name: 'Deploy Check' });
+    const saved = await smoke.request('POST', `/api/bots/${bot.body.id}/versions`, {
+      source: SAMPLE_BOTS[0]!.source,
+      label: 'v1 deploy check',
+    });
+    expect(saved.status).toBe(201);
+
+    const joined = await smoke.request('POST', `/api/bots/${bot.body.id}/ranked`);
+    expect(joined.status).toBe(403);
+    expect(joined.body.error).toBe('ranked_disabled');
+    const submittedAndRanked = await smoke.request('POST', `/api/bots/${bot.body.id}/versions`, {
+      source: SAMPLE_BOTS[1]!.source,
+      ranked: true,
+    });
+    expect(submittedAndRanked.status).toBe(201);
+    expect(submittedAndRanked.body.version).toBe(2);
+    expect((await smoke.request('GET', '/api/bots')).body.bots[0].queued).toBe(false);
+
+    const account = await context.db.query<{ ranked_eligible: boolean }>(
+      'select ranked_eligible from users where id = $1',
+      [user.id],
+    );
+    expect(account.rows[0]?.ranked_eligible).toBe(false);
+
+    // Stale/manual queue rows are ignored as a second line of defense.
+    await context.db.query('insert into ranked_queue (bot_id) values ($1)', [bot.body.id]);
+    await context.db.query(
+      'insert into ratings (bot_id, games) values ($1, 10) on conflict (bot_id) do update set games = 10',
+      [bot.body.id],
+    );
+    const status = await smoke.request('GET', '/api/ranked/status');
+    expect(status.body.queue.map((entry: { botId: string }) => entry.botId)).not.toContain(
+      bot.body.id,
+    );
+    const leaderboard = await smoke.request('GET', '/api/leaderboard?limit=100');
+    expect(leaderboard.body.entries.map((entry: { botId: string }) => entry.botId)).not.toContain(
+      bot.body.id,
+    );
+    await context.db.query('delete from ranked_queue where bot_id = $1', [bot.body.id]);
+    await context.db.query('update ratings set games = 0 where bot_id = $1', [bot.body.id]);
+  });
+
   it('lists a public profile', async () => {
     const profile = await new TestClient(app).request('GET', '/api/users/House');
     expect(profile.status).toBe(200);

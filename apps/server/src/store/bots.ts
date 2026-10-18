@@ -48,7 +48,8 @@ const SUMMARY_SELECT = `
          u.username as owner_username, u.display_name as owner_display_name, u.is_house as owner_is_house,
          v.version as active_version, v.label as active_label, v.created_at as active_created_at,
          r.rating, r.games, r.wins,
-         exists (select 1 from ranked_queue q where q.bot_id = b.id) as queued
+         u.ranked_eligible
+           and exists (select 1 from ranked_queue q where q.bot_id = b.id) as queued
   from bots b
   join users u on u.id = b.owner_id
   left join bot_versions v on v.id = b.active_version_id
@@ -208,9 +209,14 @@ export async function getVersionSources(
 }
 
 export async function enqueueBot(db: Queryable, botId: string): Promise<void> {
-  await db.query('insert into ranked_queue (bot_id) values ($1) on conflict (bot_id) do nothing', [
-    botId,
-  ]);
+  await db.query(
+    `insert into ranked_queue (bot_id)
+     select b.id
+     from bots b join users u on u.id = b.owner_id
+     where b.id = $1 and u.ranked_eligible
+     on conflict (bot_id) do nothing`,
+    [botId],
+  );
   await db.query(
     `insert into ratings (bot_id, rating) values ($1, $2) on conflict (bot_id) do nothing`,
     [botId, DEFAULT_RATING],
@@ -248,6 +254,7 @@ export async function listQueue(db: Queryable, limit = 100): Promise<QueueEntry[
             r.rating, q.enqueued_at, q.last_matched_at
      from ranked_queue q
      join bots b on b.id = q.bot_id and b.deleted_at is null and b.active_version_id is not null
+     join users u on u.id = b.owner_id and u.ranked_eligible
      left join ratings r on r.bot_id = q.bot_id
      order by q.last_matched_at asc nulls first, q.enqueued_at asc
      limit $1`,

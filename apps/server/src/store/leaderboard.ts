@@ -12,7 +12,7 @@ export async function getLeaderboard(
 ): Promise<{ entries: LeaderboardEntry[]; total: number }> {
   const from = `from ratings r
     join bots b on b.id = r.bot_id and b.deleted_at is null
-    join users u on u.id = b.owner_id
+    join users u on u.id = b.owner_id and u.ranked_eligible
     where r.games > 0 or exists (select 1 from ranked_queue q where q.bot_id = r.bot_id)`;
   const total = await db.query<{ count: number }>(`select count(*)::int as count ${from}`);
   const { rows } = await db.query<{
