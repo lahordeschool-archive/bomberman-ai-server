@@ -23,6 +23,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "codemirror": "^6.0.2",
     "phaser": "^4.2.1",
+    "posthog-js": "^1.442.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "socket.io-client": "^4.8.4",

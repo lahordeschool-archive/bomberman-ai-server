@@ -57,6 +57,8 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       RANKED_CONCURRENCY: ${RANKED_CONCURRENCY:-2}
       SHARKEY_ADMIN_PASSWORD: ${SHARKEY_ADMIN_PASSWORD:-}
+      POSTHOG_KEY: ${POSTHOG_KEY:-}
+      POSTHOG_HOST: ${POSTHOG_HOST:-https://eu.i.posthog.com}
     depends_on:
       postgres:
         condition: service_healthy

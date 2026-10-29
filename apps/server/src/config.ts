@@ -83,6 +83,9 @@ const envSchema = z
     /** Per client IP. A classroom behind one NAT shares a single address. */
     REGISTRATIONS_PER_HOUR: z.coerce.number().int().min(1).max(10000).default(30),
     SHARKEY_ADMIN_PASSWORD: optionalSecret,
+    /** PostHog project API key (public, safe in browser code). Empty disables analytics. */
+    POSTHOG_KEY: z.string().trim().default(''),
+    POSTHOG_HOST: z.preprocess(withScheme, z.url().default('https://eu.i.posthog.com')),
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV !== 'production') return;
@@ -125,6 +128,8 @@ export interface Config {
   maxBotsPerUser: number;
   registrationsPerHour: number;
   sharkeyAdminPassword: string | undefined;
+  /** PostHog analytics; `null` when POSTHOG_KEY is not set. */
+  posthog: { key: string; host: string } | null;
 }
 
 /** Settings that hold no secret, echoed back in configuration errors. */
@@ -134,6 +139,7 @@ const PUBLIC_VARIABLES = new Set([
   'REDIRECT_HOSTS',
   'RUNNER_URL',
   'TRUST_PROXY',
+  'POSTHOG_HOST',
 ]);
 
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
@@ -191,5 +197,8 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
     maxBotsPerUser: env.MAX_BOTS_PER_USER,
     registrationsPerHour: env.REGISTRATIONS_PER_HOUR,
     sharkeyAdminPassword: env.SHARKEY_ADMIN_PASSWORD,
+    posthog: env.POSTHOG_KEY
+      ? { key: env.POSTHOG_KEY, host: new URL(env.POSTHOG_HOST).origin }
+      : null,
   };
 }

@@ -26,6 +26,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { Server } from 'socket.io';
 import type { AppContext } from '../context.ts';
 import { inspectCompletedMatch } from '../store/integrity.ts';
+import { captureServerEvent } from '../analytics/posthog.ts';
 import { abortMatch, completeMatch, insertMatch, type NewParticipant } from '../store/matches.ts';
 
 export interface ArenaParticipant {
@@ -248,6 +249,15 @@ export class Arena {
           );
         }
         this.io.to(room).emit('match:end', { matchId, result });
+        captureServerEvent(this.context.config, 'match_finished', 'bomber-arena-server', {
+          matchId,
+          kind: options.kind,
+          players: options.participants.length,
+          endTick: result.endTick,
+          winnerId: result.winnerId,
+          deaths: deaths.length,
+          $process_person_profile: false,
+        });
         this.log.info(
           {
             matchId,

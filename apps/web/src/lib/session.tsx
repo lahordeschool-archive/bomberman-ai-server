@@ -1,5 +1,6 @@
 import type { PublicUser, SessionResponse } from '@bomberman/protocol';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import { identifyUser } from './analytics.ts';
 import { api, setCsrfToken } from './api.ts';
 import { resetSocket } from './socket.ts';
 
@@ -19,6 +20,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const apply = useCallback((session: SessionResponse) => {
     setCsrfToken(session.csrfToken);
     setUser(session.user);
+    identifyUser(session.user);
     resetSocket();
   }, []);
 

@@ -52,6 +52,7 @@ import type { ArenaRenderer } from '../game/renderer.ts';
 import { Scoreboard } from '../game/Scoreboard.tsx';
 import { useCasualRoom } from '../game/useCasualRoom.ts';
 import { useLocalMatch } from '../game/useLocalMatch.ts';
+import { capture } from '../lib/analytics.ts';
 import { api } from '../lib/api.ts';
 import { Link, useRouter } from '../lib/router.tsx';
 import { useSession } from '../lib/session.tsx';
@@ -453,6 +454,12 @@ export default function BotEditorPage({ botId }: { botId: string }) {
         label,
         ranked: rankedOnSave,
       });
+      capture('bot_version_saved', {
+        botId,
+        version: version.version,
+        visibility,
+        queuedForRanked: rankedOnSave,
+      });
       await refresh();
       rememberLoaded(savedKey(botId, version.id));
       setSaveLabel(null);
@@ -473,6 +480,7 @@ export default function BotEditorPage({ botId }: { botId: string }) {
     try {
       const next = bot?.queued ? await api.dequeue(botId) : await api.enqueue(botId);
       setRanked(next);
+      capture(bot?.queued ? 'bot_dequeued_from_ranked' : 'bot_queued_for_ranked', { botId });
       await refresh();
     } catch (failure) {
       setActionError((failure as Error).message);
