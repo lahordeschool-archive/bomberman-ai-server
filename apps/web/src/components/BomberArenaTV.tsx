@@ -17,6 +17,7 @@ import type { ArenaRenderer } from '../game/renderer.ts';
 import { ReplayPlayer } from '../game/ReplayPlayer.tsx';
 import { entriesFromSummary, Scoreboard, type ScoreboardEntry } from '../game/Scoreboard.tsx';
 import { buildTimeline, type ReplayTimeline } from '../game/timeline.ts';
+import { capture } from '../lib/analytics.ts';
 import { api } from '../lib/api.ts';
 import { emitWithAck, getSocket } from '../lib/socket.ts';
 import { MatchBrowser } from './MatchBrowser.tsx';
@@ -298,6 +299,7 @@ export function BomberArenaTV({
     if (!replayMatch) return;
     let cancelled = false;
     moveChat(null);
+    capture('replay_opened', { matchId: replayMatch.id });
     api.replay(replayMatch.id).then(
       (replay) => !cancelled && setTimeline(buildTimeline(replay)),
       (failure: Error) => !cancelled && setReplayError(failure.message),

@@ -8,6 +8,17 @@ const production = {
 };
 
 describe('loadConfig', () => {
+  it('enables PostHog only when POSTHOG_KEY is set', () => {
+    expect(loadConfig({ ...production, PUBLIC_ORIGIN: 'bomber-arena.com' }).posthog).toBeNull();
+    const config = loadConfig({
+      ...production,
+      PUBLIC_ORIGIN: 'bomber-arena.com',
+      POSTHOG_KEY: 'phc_test',
+      POSTHOG_HOST: 'eu.i.posthog.com/',
+    });
+    expect(config.posthog).toEqual({ key: 'phc_test', host: 'https://eu.i.posthog.com' });
+  });
+
   it('accepts a public origin given without a scheme, as hosting panels fill it', () => {
     const config = loadConfig({
       ...production,

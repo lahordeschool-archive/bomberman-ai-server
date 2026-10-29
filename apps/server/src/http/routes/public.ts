@@ -12,7 +12,10 @@ import { notFound } from '../errors.ts';
 const usernameParam = z.object({ username: z.string().max(64).transform(normalizeUsername) });
 
 export function registerPublicRoutes(app: FastifyInstance, context: AppContext): void {
-  const { db } = context;
+  const { db, config } = context;
+
+  /** Public client settings (no secrets): the PostHog project key is meant for browsers. */
+  app.get('/api/config', async () => ({ posthog: config.posthog }));
 
   app.get('/api/leaderboard', async (request) => {
     const { limit, offset } = paginationQuery.parse(request.query);

@@ -52,6 +52,14 @@ export async function buildApp(
     });
   }
 
+  // PostHog: API host plus its static assets host (e.g. eu.i.posthog.com → eu-assets.i.posthog.com).
+  const analyticsOrigins = config.posthog
+    ? [
+        config.posthog.host,
+        config.posthog.host.replace(/^https:\/\/(us|eu)\.i\./, 'https://$1-assets.i.'),
+      ].filter((value, index, all) => all.indexOf(value) === index)
+    : [];
+
   await app.register(fastifyCookie);
   await app.register(fastifyHelmet, {
     contentSecurityPolicy: {
@@ -59,13 +67,13 @@ export async function buildApp(
       directives: {
         defaultSrc: ["'self'"],
         // WebAssembly only (the QuickJS fallback sandbox); JavaScript eval stays blocked.
-        scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
+        scriptSrc: ["'self'", "'wasm-unsafe-eval'", ...analyticsOrigins],
         workerSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'blob:'],
         mediaSrc: ["'self'", 'blob:'],
         fontSrc: ["'self'"],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", ...analyticsOrigins],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         frameAncestors: ["'none'"],

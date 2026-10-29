@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { Button, Card, ErrorMessage, Field } from '../components/ui.tsx';
+import { capture } from '../lib/analytics.ts';
 import { api, RequestError } from '../lib/api.ts';
 import { Link, useRouter } from '../lib/router.tsx';
 import { useSession } from '../lib/session.tsx';
@@ -54,6 +55,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           })
         : await api.login({ username, password });
       apply(session);
+      capture(isRegister ? 'signup' : 'login');
       if (path === '/login' || path === '/register') navigate('/');
     } catch (error) {
       if (error instanceof RequestError && error.issues) {
